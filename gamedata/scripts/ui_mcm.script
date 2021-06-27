@@ -1954,6 +1954,7 @@ end
 	- Define: ( table {function, parameters} )
 	- Used by: option elements: ALL
 		Execute a function when option's changes get applied
+		The value of the option is added to the end of the parameters list.
 		
 	[postcondition]
 	- Define: ( table {function, parameters} )
