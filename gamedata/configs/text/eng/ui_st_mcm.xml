@@ -1,0 +1,30 @@
+<!-- 
+	Anomaly Modconfiguration Menu strings
+	
+-->
+
+<string_table>
+
+	<string id="ui_mcm_desc_mcm">
+		<text>Welcome to Anomaly Mod Configuration Menu. By itself MCM does nothing. MCM provides a place for other mods/addons to display a settings UI.
+		To the left you will see a list of mods/addons that are using MCM to do so.</text>
+	</string>
+	<string id="ui_mcm_desc_mcm2">
+		<text>Bugs with MCM or crashes with ui_mcm.script in the log are most likely caused by one of the mods/addons using MCM and should be reported to that mod/addon's author. </text>
+	</string>
+	<string id="ui_mm_menu_mcm">
+		<text>Mod Configuration Menu</text>
+	</string>
+
+	<string id="ui_mcm_menu_mcm">
+		<text>MCM</text>
+	</string>
+	<string id="ui_mcm_mcm_reset">
+		<text>Reload all menus</text>
+	</string>
+	<string id="ui_mcm_mcm_reset_desc">
+		<text>Checking this and hitting apply will cause MCM to reload all menus. This is a debugging tool and shouldn't be necessary in the normal course of things.</text>
+	</string>
+
+
+</string_table>

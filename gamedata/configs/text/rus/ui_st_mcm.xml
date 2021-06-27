@@ -1,0 +1,31 @@
+<!-- 
+	Anomaly Modconfiguration Menu strings
+	
+-->
+
+<string_table>
+
+	<string id="ui_mcm_desc_mcm">
+		<text>Добро пожаловать в меню конфигурации аномального мода. Сам по себе MCM ничего не делает. MCM предоставляет место для других модов / дополнений для отображения пользовательского интерфейса настроек.
+Слева вы увидите список модов / дополнений, которые используют MCM для этого.</text>
+	</string>
+	<string id="ui_mcm_desc_mcm2">
+		<text>
+Ошибки с MCM или сбои с ui mcm.script в журнале, скорее всего, вызваны одним из модов / дополнений, использующих MCM, и о них следует сообщать этому автору мода / дополнений.</text>
+	</string>
+	<string id="ui_mm_menu_mcm">
+		<text>Меню конфигурации мода</text>
+	</string>
+
+	<string id="ui_mcm_menu_mcm">
+		<text>MCM</text>
+	</string>
+	<string id="ui_mcm_mcm_reset">
+		<text>Обновить все меню</text>
+	</string>
+	<string id="ui_mcm_mcm_reset_desc">
+		<text>Проверка этого и нажатие кнопки «Применить» заставит MCM перезагрузить все меню. Это инструмент для отладки, который в обычном режиме не нужен.</text>
+	</string>
+
+
+</string_table>

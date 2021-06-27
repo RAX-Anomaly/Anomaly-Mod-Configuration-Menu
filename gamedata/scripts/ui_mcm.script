@@ -1,0 +1,2128 @@
+
+--[[
+	RavenAcsendant
+	25MAY2021
+	Anommaly Mod Configuration Menu (Anomaly MCM)
+		1_1 added options table passed by referance
+		1_2 Fixed a crash that is actualy still part of ui_options
+		1_3 Added overide controls for option tree/branch text see the tutorial section "Parameters of option Tree" at the end of this sctipt
+		1_4 Integrated dph-hcl's script for save game specific MCM options. See "Tutorial: Using : dph-hcl's script for save game specific MCM options"
+	
+	+Modified version of the Anomaly Options menu created by Tronex. It retains all the same features.
+	+Dedicated space for mod options (As of 1_4 this includes easy save game specific options storage)
+	+Dynamicly loads options  from mod scripts at main menu load
+		simplifying the process and alowing it to be done before a save is loaded
+		without needing to edit a game script. There by reducing conflicts.
+		
+	
+	
+	Tronex
+	2019/10/12
+	Anomlous Options Menu
+	
+	Features:
+		- %100 customizable, support for all kind of xml elements
+		- Highlight pending changes
+		- Option description support
+		- Option presets support
+		- Reset button to clear pending changes
+		- Script callback on option changes
+		- Functors capability to excute on apply or init
+		- Precoditions capability to hide/show/execute functors
+		
+	To get an option value inside other scripts, use: ui_mcm.get(parameter)
+	Check the options table here to see the values used
+	
+	See the tutorial at the bottom for adding or modifying options table
+	
+--]]
+
+local enable_debug = false
+------------------------------------------------------------
+-- Strings and LTX management
+------------------------------------------------------------
+local ini_pres	   = ini_file("presets\\includes.ltx")
+local ini_loc 	   = ini_file_ex("localization.ltx",true)
+local _opt_        = "/"                 -- For axr_options.ltx, don't touch!
+local opt_section  = "mcm"           -- For axr_options.ltx, don't touch!
+local opt_str      = "ui_mcm_"			 -- Option name: "ui_mcm_(option ID)" -- Option description: "ui_mcm_(option ID)_desc"
+local opt_str_menu = "ui_mcm_menu_"		 -- Option menu: "ui_mcm_menu_(option menu ID)"
+local opt_str_prst = "ui_mcm_prst_"       -- Option preset: "ui_mcm_prst_(option preset ID)"
+local opt_str_lst  = "ui_mcm_lst_"		 -- List/Radio keys: "ui_mcm_lst_(key)"
+function cc(path,opt) return (path .. _opt_ .. opt) end
+
+------------------------------------------------------------
+-- Utilities
+------------------------------------------------------------
+
+local m_floor, m_ceil, s_find, s_gsub 	    =	 math.floor, math.ceil, string.find, string.gsub
+local clr, clamp, round_idp, str_explode 	=	 utils_xml.get_color, clamp, round_idp, str_explode
+local precision                             = 6 -- allowed number of zeros
+local width_factor                          = utils_xml.is_widescreen() and 0.8 or 1
+local clr_o                                 = GetARGB(255, 250, 150, 75)
+local clr_g1                                = GetARGB(255, 170, 170, 170)
+local clr_g2                                = GetARGB(255, 200, 200, 200)
+local clr_w                                 = GetARGB(255, 255, 255, 255)
+local clr_tree = {
+	[1] = GetARGB(255, 180, 180, 180),
+	[2] = GetARGB(255, 180, 180, 180),
+	[3] = GetARGB(255, 180, 180, 180),
+}
+
+function print_dbg(...)
+	if enable_debug then
+		printf(...)
+	end
+end
+
+
+
+------------------------------------------------------------
+-- Options
+------------------------------------------------------------
+options = {}
+local opt_temp     = {} -- stores pending changes
+local opt_backup   = {} -- do a backup of original changes for comparison with pendings
+local opt_index    = {} -- option index by path, so we can locate an option fast without iterating throw the whole options table
+local opt_val      = {} -- option value type by path, to execute proper functions on different type without iterating throw the whole options table
+local allowed_type = { -- ignore tables from these types in temp tables
+	["check"] = true,  
+	["list"] = true,  
+	["input"] = true,  
+	["radio_h"] = true,  
+	["radio_v"] = true,  
+	["track"] = true,  
+}
+function init_opt_base()
+
+options = {
+
+{ id= "mcm"        , sh=true    ,gr={
+	
+		{ id= "slide_mcm"		 	   ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_menu_mcm"		,size= {512,50}		},
+		{ id= "desc_mcm"    	 	,type= "desc"     ,text= "ui_mcm_desc_mcm"			 ,clr= {255,125,175,200}	},
+		{ id= "desc_mcm2"    	 	,type= "desc"     ,text= "ui_mcm_desc_mcm2"			 ,clr= {255,125,175,200}	},
+		{ id="reset"	              ,type= "check"    ,val= 1	,def= false 	    , functor = {reload }                                                 	                },
+			
+},
+}}
+
+gather_options()
+
+
+init_opt_coder()	
+end
+
+
+function init_opt_coder()
+	
+	------------------------------------------------------------------------
+	-- Coding options
+	local function code_option(gr, id, num)
+		local path
+		for i=1,#gr do
+			if allowed_type[gr[i].type] then
+				path            = cc(id , gr[i].id)
+				opt_index[path] = cc(num , i)
+				opt_val[path]  = gr[i].val
+				--printf("-[%s] | index: %s - type: %s", path, opt_index[path], opt_val[path])
+			end
+		end
+	end
+	
+	local id_1, id_2, id_3
+	-- Level 1
+	for i=1,#options do
+		id_1 = options[i].id
+		if options[i].sh then
+			code_option(options[i].gr, id_1, i)
+		else
+			-- Level 2
+			for ii=1,#options[i].gr do
+				id_2 = options[i].gr[ii].id
+				if options[i].gr[ii].sh then
+					code_option( (options[i].gr[ii].gr), (id_1 .._opt_.. id_2), (i .._opt_.. ii) )
+				else
+					-- Level 3
+					for iii=1,#options[i].gr[ii].gr do
+						id_3 = options[i].gr[ii].gr[iii].id
+						if options[i].gr[ii].gr[iii].sh then
+							code_option( (options[i].gr[ii].gr[iii].gr), (id_1 .._opt_.. id_2 .._opt_.. id_3), (i .._opt_.. ii .._opt_.. iii) )
+						else
+							----
+						end
+					end
+			
+				end
+			end
+		end
+	end
+
+end
+
+function gather_options()
+	-- this is modified from how axr_main loads all the other scripts thanks to Igi for the idea.
+	local ignore = { 
+		["_G.script"] = true,
+		["class_registrator.script"] = true,
+		["game_registrator.script"] = true,
+		["ui_registrator.script"] = true,
+		["ce_new_attachable_item.script"] = true,
+		["ce_new_game_dm.script"] = true,
+		["sim_faction_brain_human.script"] = true,
+		["sim_faction_brain_mutant.script"] = true,
+		["ce_switcher.script"] = true,
+		["axr_main.script"] = true,
+		["lua_help.script"] = true,
+		["rx_gl.script"] = true
+	}
+	
+	local t = {}
+	local size_t = 0 
+	local f	= getFS()
+	local flist = f:file_list_open_ex("$game_scripts$",bit_or(FS.FS_ListFiles,FS.FS_RootOnly),"*mcm.script")
+	local f_cnt = flist:Size()
+	for	it=0, f_cnt-1 do
+		local file = flist:GetAt(it)
+		local file_name = file:NameShort()
+		--printf("%s size=%s",file_name,file:Size())
+		if (file:Size() > 0 and ignore[file_name] ~= true) then
+			file_name = file_name:sub(0,file_name:len()-7)
+			if (_G[file_name] and _G[file_name].on_mcm_load) then
+				size_t = size_t + 1 
+				t[size_t] = file_name -- load all scripts first
+			end
+		end
+	end
+	for i=1,#t do
+		--printf("%s.on_game_start()",t[i])
+		local temp = nil
+		temp, name = _G[ t[i] ].on_mcm_load(options) -- passing options by referance added in AMCM 1.1 if you use this, nil check, emphasise updating MCM in your mod desc or something
+		if temp and name then
+			local collect = false
+			for j=1, #options do
+				if options[j].id == name then
+					collect = j
+				end
+			end
+			if not collect then
+				collection = { id = name        , gr = {}}
+				table.insert(collection.gr, temp)
+				table.insert(options, collection)
+			else
+				table.insert(options[collect].gr, temp)
+			end
+		elseif temp then
+			table.insert(options, temp)
+		end
+	end
+
+end
+
+
+------------------------------------------------------------
+-- Functors
+------------------------------------------------------------
+
+-- Special
+function start_lighting_ui(self)
+	self:On_Cancel()
+	ui_ctrl_lighting.start()
+end
+
+function reload()
+	set("mcm/reset", false)
+	init_opt_base()
+end
+
+-- Preconditions
+function level_present()
+	return level.present()
+end
+function debug_only()
+	return DEV_DEBUG
+end
+function for_renderer(...)
+	local rend = {...}
+	local curr_rend = get_console_cmd(0, "renderer")
+	local result = false
+	for i=1,#rend do
+		result = result or curr_rend == rend[i]
+	end
+	return result
+end
+
+
+
+
+
+-- Utilities
+function is_int(num)
+	return (m_floor(num) == num)
+end
+function exec(func,...)
+	if (not func) then
+		return false
+	end
+	return func(...)
+end
+function str_opt_explode(id, by_num)
+	local nums = by_num and opt_index[id] or id
+	local t = nums and str_explode(nums, _opt_) or {}
+	if by_num then
+		for i=1,#t do
+			t[i] = tonumber(t[i])
+		end
+	end
+	return t
+end
+function get_opt_table(id)
+	local t = str_opt_explode(id, true)
+	if #t == 0 then
+		return {}
+	end
+	
+	if #t == 1 then
+		return options[t[1]]
+	elseif #t == 2 then
+		return options[t[1]].gr[t[2]]
+	elseif #t == 3 then
+		return options[t[1]].gr[t[2]].gr[t[3]]
+	elseif #t == 4 then
+		return options[t[1]].gr[t[2]].gr[t[3]].gr[t[4]]
+	end
+end
+function check_opt_table(id)
+	local t = str_opt_explode(id, true)
+	return #t > 0
+end
+
+--------------------
+function get(id)
+	if (#options == 0) then
+		init_opt_base()
+	end
+	
+	local value = axr_main.config:r_value(opt_section, id, opt_val[id])
+	if (value ~= nil) then
+		--print_dbg("/Got axr_option [%s] = %s", id, value)
+		return value
+	end
+	
+	-- Write in axr_main if it doesn't exist
+	local v = get_opt_table(id)
+	if v.cmd then
+		if v.val == 0 then
+			value = get_console_cmd(0, v.cmd)
+		elseif v.val == 1 then
+			value = get_console_cmd(1, v.cmd)
+		elseif v.val == 2 then
+			value = get_console_cmd(0, v.cmd)	--get_console_cmd(2, v.cmd)
+			value = tonumber(value)
+			if v.min and v.max then
+				value = clamp(value, v.min, v.max)
+			end
+			value = round_idp(value, v.prec or precision)
+		end
+	elseif (type(v.def) == "table") then
+		value = exec(unpack(v.def))
+		axr_main.config:w_value(opt_section, id, value)
+		axr_main.config:save()
+	else
+		value = v.def
+		axr_main.config:w_value(opt_section, id, value)
+		axr_main.config:save()
+	end
+	
+	--print_dbg("/Got option [%s] = %s", id, value)
+	if (value == nil) then
+		printe("!Found nil option value [%s]", id)
+	end
+	
+	return value
+end
+
+function set(id, value)
+	axr_main.config:w_value(opt_section, id, value)
+	axr_main.config:save()
+end
+--------------------
+
+
+--===========================================================
+--//////////////////////// OPTIONS //////////////////////////
+--===========================================================
+
+class "UIMCM" (CUIScriptWnd)
+
+function UIMCM:__init() super()
+	self.last_tree = {}
+	self.last_path = nil
+	self.last_curr_tree = nil
+	
+	self._Cap = {}
+	self._Check = {}
+	self._List = {}
+	self._Input = {}
+	self._Track = {}
+	self._Radio = {}
+
+	-- Prepare the options table
+	if (#options == 0) then
+		init_opt_base()
+	end
+	printf("MCM init")
+	self:InitControls()
+    self:InitCallBacks()
+	
+	self:Reset()
+end
+
+function UIMCM:__finalize()
+end
+
+function UIMCM:InitControls()
+	self:SetWndRect				(Frect():set(0,0,1024,768))
+	self:Enable					(true)
+
+	self.xml = CScriptXmlInit()
+	local xml = self.xml
+	xml:ParseFile				("ui_options.xml")
+	
+	self.background 			= xml:InitStatic("background", self)
+	self.dialog					= xml:InitStatic("main", self)
+	
+	xml:InitStatic("main:frame", self.dialog)
+	
+	-- Buttons
+	self.btn_accept = xml:Init3tButton("main:btn_accept", self.dialog)
+	self:Register(self.btn_accept, "btn_accept")
+	
+	self.btn_reset = xml:Init3tButton("main:btn_reset", self.dialog)
+	self:Register(self.btn_reset, "btn_reset")
+	
+	self.btn_default = xml:Init3tButton("main:btn_default", self.dialog)
+	self:Register(self.btn_default, "btn_default")
+	
+	self.btn_cancel = xml:Init3tButton("main:btn_cancel", self.dialog)
+	self:Register(self.btn_cancel, "btn_cancel")
+	
+	-- Pending text
+	--xml:InitFrame("main:notify_frame", self.dialog)
+	self.pending = xml:InitTextWnd("main:notify", self.dialog)
+	
+	-- Options lists
+	self.tree = {}
+	self.bl = {}
+	
+	-- Options showcase
+	self.scroll_opt = xml:InitScrollView("main:scroll", self.dialog)
+	
+	-- Presets
+	self.preset_cap = xml:InitStatic("main:cap_preset", self.dialog)
+	self.preset = xml:InitComboBox("main:preset",self.dialog)
+	self:Register(self.preset, "preset")
+	self.preset:Show(false)
+	self.preset_cap:Show(false)
+	
+	-- Message box
+	self.message_box			= CUIMessageBoxEx()
+	self:Register				(self.message_box, "mb")
+	
+	-- Hint Window
+	self.hint_wnd = utils_ui.UIHint(self)
+end
+
+function UIMCM:InitCallBacks()
+	self:AddCallback("btn_accept", ui_events.BUTTON_CLICKED, self.OnButton_Accept, self)
+	self:AddCallback("btn_reset", ui_events.BUTTON_CLICKED, self.OnButton_Reset, self)
+	self:AddCallback("btn_default", ui_events.BUTTON_CLICKED, self.OnButton_Default, self)
+	self:AddCallback("btn_cancel", ui_events.BUTTON_CLICKED, self.OnButton_Cancel, self)
+	
+	self:AddCallback("preset", ui_events.LIST_ITEM_SELECT, self.Callback_Preset, self)
+	
+	self:AddCallback("mb", ui_events.MESSAGE_BOX_YES_CLICKED, self.On_Discard, self)
+	--self:AddCallback("mb", ui_events.MESSAGE_BOX_NO_CLICKED, self.On_Discard,self)
+end
+
+function UIMCM:Update()
+	CUIScriptWnd.Update(self)
+
+	-- Show hint on hover
+	for id,ctrl in pairs(self._Cap) do
+		if ctrl:IsCursorOverWindow() then
+			local str = opt_str .. id .. "_desc" 
+			local str_t = game.translate_string(str)
+			if (str ~= str_t) then
+				self.hint_wnd:Update(str_t)
+			end
+			return
+		end
+	end
+	
+	self.hint_wnd:Update()
+	
+	-- Hack to simulate tracing method for TrackBar value changes. TODO: add callback support for CUITrackBar in engine, this is just silly
+	for id,e in pairs(self._Track) do
+		if e.ctrl:IsCursorOverWindow() then
+			local v = self:GetOption(id)
+			local value = round_idp(e.ctrl:GetFValue(), v.prec or precision)
+			if (value ~= e.value) then
+				e.value = value
+				self:Callback_Track(e.txt, e.path, e.opt, v, value)
+				return
+			end
+		end
+	end
+end
+
+function UIMCM:Reset()
+	-- Clear all trees
+	for i=1,3 do
+		if self.tree[i] then
+			if type(self.tree[i]) == table then
+				for j=1,#self.tree[i] do
+					self.tree[i][j]:Clear()
+				end
+			else
+				self.tree[i]:Clear()
+			end
+		end
+	end
+	
+	self:Register_Tree(1, "", options, 1)
+end
+
+function UIMCM:Reset_opt(curr_tree, path, flags)
+	flags = flags or {}
+	local xml = self.xml
+	self.scroll_opt:Clear()
+	
+	-- If options tree has a precondition that must be met, don't show it if it returns false
+	if curr_tree.precondition and (not exec(unpack(curr_tree.precondition))) then
+		if curr_tree.output then
+			local _txt = xml:InitTextWnd("elements:block", nil)
+			_txt:SetText( game.translate_string(curr_tree.output) )
+			
+			self.scroll_opt:AddWindow(_txt, true)
+			_txt:SetAutoDelete(false)
+		end
+	else
+		
+		
+		-- Keybinds
+		if (self.dlg_controls == nil) then
+			self.dlg_controls			= mcm_controls()
+			self.dlg_controls:InitControls(0,0, xml, self)
+			self.dlg_controls:Show		(false)
+			self.dialog:AttachChild		(self.dlg_controls)
+			xml:InitWindow				("tab_size", 0, self.dlg_controls)
+			
+			local opt = COptionsManager()
+			
+			opt:SetCurrentValues("key_binding")
+			opt:SaveBackupValues("key_binding")
+		end
+		if (path == "control/keybind") then
+			self.dlg_controls:Show(true)
+			self.Keybinds_Shown = true
+		else
+			self.dlg_controls:Show(false)
+		end
+		
+		-- Presets
+		self:Register_Preset(curr_tree)
+		
+		if curr_tree.apply_to_all and curr_tree.id_gr then
+			flags.apply_to_all = true
+			flags.group = curr_tree.id_gr
+		else
+			flags.apply_to_all = nil
+		end
+		
+		empty_table(self._Cap)
+		empty_table(self._Check)
+		empty_table(self._List)
+		empty_table(self._Input)
+		empty_table(self._Track)
+		empty_table(self._Radio)
+		
+		for i=1,#curr_tree.gr do
+			-- Check preconditions
+			local to_hide = curr_tree.gr[i].precondition and (not exec(unpack(curr_tree.gr[i].precondition)))
+			for j=1,10 do -- support for 10 preconditions
+				if (not curr_tree.gr[i]["precondition_" .. j]) then
+					break
+				elseif (not exec(unpack(curr_tree.gr[i]["precondition_" .. j]))) then
+					to_hide = true
+					break
+				end
+			end
+			
+			if (not to_hide) then
+				local opt = curr_tree.gr[i].id
+				local v = curr_tree.gr[i]
+				
+				local _st = xml:InitStatic("main:st", nil)
+				local _h = 0
+		
+----------- Support
+				if (v.type == "line") then
+					_h = self:Register_Line(xml, _st)
+		
+				elseif (v.type == "image") then
+					_h = self:Register_Image(xml, _st, v)
+					
+				elseif (v.type == "slide") then
+					_h = self:Register_Slide(xml, _st, v)
+				
+				elseif (v.type == "title") then
+					_h = self:Register_Title(xml, _st, v)
+				
+				elseif (v.type == "desc") then
+					_h = self:Register_Desc(xml, _st, v)
+			
+----------- Option
+				elseif (v.type == "check") then
+					_h = self:Register_Check(xml, _st, path, opt, v, flags)
+					
+				elseif (v.type == "button") then
+					_h = self:Register_Button(xml, _st, path, opt, v, flags)
+					
+				elseif (v.type == "list") then
+					_h = self:Register_List(xml, _st, path, opt, v, flags)
+				
+				elseif (v.type == "input") then
+					_h = self:Register_Input(xml, _st, path, opt, v, flags)
+				
+				elseif (v.type == "track") then
+					_h = self:Register_Track(xml, _st, path, opt, v, flags)
+					
+				elseif (v.type == "radio_h") then
+					_h = self:Register_Radio(xml, _st, path, opt, v, true, flags)
+					
+				elseif (v.type == "radio_v") then
+					_h = self:Register_Radio(xml, _st, path, opt, v, false, flags)
+					
+				end
+				
+				_st:SetWndSize(vector2():set(_st:GetWidth(), _h + 10))
+				self.scroll_opt:AddWindow(_st, true)
+				_st:SetAutoDelete(true)
+			end
+		end
+		if self.Save_AXR then
+			self.Save_AXR = false
+			axr_main.config:save()
+		end
+	end
+end
+
+function UIMCM:Reset_last_opt()
+	Register_UI("UIMCM")
+	
+	if self.last_curr_tree and self.last_path then
+		self:Reset_opt(self.last_curr_tree, self.last_path)
+		self:UpdatePending()
+	end
+end
+
+------------------------------------------------------------
+-- Elements
+------------------------------------------------------------
+function UIMCM:Register_Cap(xml, handler, id, hint)
+	id = s_gsub(id, _opt_, "_")
+	self._Cap[id] = xml:InitStatic("elements:cap",handler)
+	self._Cap[id]:TextControl():SetText( game.translate_string(opt_str .. (hint or id)) )
+	return self._Cap[id]:GetHeight()
+end
+
+function UIMCM:Register_Line(xml, handler)
+	local line = xml:InitStatic("elements:line",handler)
+	return (line:GetHeight() + 10)
+end
+
+function UIMCM:Register_Image(xml, handler, v)
+	local pic = xml:InitStatic("elements:image",handler)
+	if v.link then
+		if (v.pos) then
+			local pos = pic:GetWndPos()
+			pic:SetWndPos(vector2():set( pos.x + v.pos[1] , pos.y + v.pos[2] ))
+		end
+		if (v.size) then
+			pic:SetWndSize(vector2():set( v.size[1] , v.size[2] ))
+		end
+		pic:InitTexture(v.link)
+		pic:SetStretchTexture(v.stretch and true or false)
+	end
+	return pic:GetHeight()
+end
+
+function UIMCM:Register_Slide(xml, handler, v)
+	local frame = xml:InitStatic("elements:slide", handler)
+	local _pos = frame:GetWndPos()
+	frame:SetWndPos(vector2():set( _pos.x , _pos.y + (v.spacing or 20) ))
+	
+	local pic = xml:InitStatic("elements:slide:pic", frame)
+	if v.link then
+		pic:InitTexture(v.link)
+		pic:SetStretchTexture(true)
+		if (v.pos) then
+			local pos = pic:GetWndPos()
+			pic:SetWndPos(vector2():set( pos.x + v.pos[1] , pos.y + v.pos[2] ))
+		end
+		if (v.size) then
+			pic:SetWndSize(vector2():set( v.size[1] * width_factor , v.size[2] ))
+		end
+		pic:InitTexture(v.link)
+	end
+	
+	local txt = xml:InitTextWnd("elements:slide:txt", frame)
+	if v.text then
+		txt:SetText( game.translate_string(v.text) )
+	end
+	
+	xml:InitStatic("elements:slide:line_1", frame)
+	xml:InitStatic("elements:slide:line_2", frame)
+	
+	return (pic:GetHeight() + 20)
+end
+
+function UIMCM:Register_Title(xml, handler, v)
+	local title = xml:InitTextWnd("elements:title_" .. (v.align or "l"), handler)
+	title:SetText( game.translate_string(v.text) )
+	title:AdjustHeightToText()
+	title:SetWndSize(vector2():set(title:GetWidth(), title:GetHeight() + 20))
+	if v.clr and v.clr[4] then
+		title:SetTextColor( GetARGB(v.clr[1], v.clr[2], v.clr[3], v.clr[4]) )
+	end
+	return title:GetHeight()
+end
+
+function UIMCM:Register_Desc(xml, handler, v)
+	local desc = xml:InitTextWnd("elements:desc", handler)
+	desc:SetText( game.translate_string(v.text) )
+	desc:AdjustHeightToText()
+	desc:SetWndSize(vector2():set(desc:GetWidth(), desc:GetHeight() + 20))
+	if v.clr and v.clr[4] then
+		desc:SetTextColor( GetARGB(v.clr[1], v.clr[2], v.clr[3], v.clr[4]) )
+	end
+	return desc:GetHeight()
+end
+
+function UIMCM:Register_Check(xml, handler, path, opt, v, flags)
+	local id = cc(path , opt)
+	
+	-- Caption
+	local h = self:Register_Cap(xml, handler,  id, v.hint)
+	
+	-- Apply to all button
+	if flags.apply_to_all and flags.group then
+		self:Register_BtnAll(xml, handler, path, opt, v, flags)
+	end
+
+	-- Create control
+	local ctrl = xml:InitCheck("elements:check",handler)
+	if (ctrl:GetHeight() > h) then
+		h = ctrl:GetHeight()
+	end
+	
+	-- Get values
+	local value = self:GetValue(path, opt, v, flags)
+	ctrl:SetCheck(value)
+	
+	-- Register
+	local id_ctrl = self:Stacker(path, opt, v)
+	
+	self:Register(ctrl, id_ctrl)
+	local _wrapper = function(handler) -- we need wrapper in order to pass ctrl to method
+		self:Callback_Check(ctrl, path, opt, v)
+	end
+	self:AddCallback(id_ctrl, ui_events.BUTTON_CLICKED, _wrapper, self)
+	
+	return h
+end
+function UIMCM:Callback_Check(ctrl, path, opt, v)
+	local value = ctrl:GetCheck()
+	self:CacheValue(path, opt, value, v)
+end
+
+function UIMCM:Register_Button(xml, handler, path, opt, v, flags)
+	local id = cc(path , opt)
+	
+	
+	
+	--[[ Apply to all button
+	if flags.apply_to_all and flags.group then
+		self:Register_BtnAll(xml, handler, path, opt, v, flags)
+	end
+	--]]
+	
+	xml:InitFrame("elements:frame_button", handler)
+	
+	-- Create control
+	local ctrl = xml:Init3tButton("elements:btn_button", handler)
+	local h = ctrl:GetHeight()
+	
+	-- Caption
+	local id_cap = s_gsub(id, _opt_, "_")
+	self._Cap[id_cap] = xml:InitStatic("elements:cap_button",handler)
+	self._Cap[id_cap]:TextControl():SetText( game.translate_string(opt_str .. (v.hint or id_cap)) )
+	if (self._Cap[id_cap]:GetHeight() > h) then
+		h = self._Cap[id_cap]:GetHeight()
+	end
+	
+	-- Register
+	local id_ctrl = self:Stacker(path, opt, v)
+	
+	self:Register(ctrl, id_ctrl)
+	local _wrapper = function(handler) -- we need wrapper in order to pass ctrl to method
+		self:Callback_Button(ctrl, path, opt, v)
+	end
+	self:AddCallback(id_ctrl, ui_events.BUTTON_CLICKED, _wrapper, self)
+	
+	return h
+end
+function UIMCM:Callback_Button(ctrl, path, opt, v)
+	if v.functor_ui then
+		local id = cc(path , opt)
+		print_dbg("- Executing functor_ui of [%s]",id)
+		exec(unpack(v.functor_ui),self)
+	end
+	if v.functor then
+		local id = cc(path , opt)
+		print_dbg("- Executing functor of [%s]",id)
+		exec(unpack(v.functor))
+	end
+end
+
+function UIMCM:Register_List(xml, handler, path, opt, v, flags)
+	local id = cc(path , opt)
+	
+	-- Caption
+	local h = self:Register_Cap(xml, handler,  id, v.hint)
+	
+	-- Apply to all button
+	if flags.apply_to_all and flags.group then
+		self:Register_BtnAll(xml, handler, path, opt, v, flags)
+	end
+	
+	-- Create control
+	local ctrl = xml:InitComboBox("elements:list",handler)
+	if (ctrl:GetHeight() > h) then
+		--h = ctrl:GetHeight()
+	end
+	
+	-- Get values
+	local idx
+	local value = self:GetValue(path, opt, v, flags)
+	local content = self:GetContent(path, opt, v)
+	
+	-- Setup
+	for i=1,#content do 
+		local str_2 = content[i][2] or tostring(content[i][1])
+		local str = v.no_str and str_2 or game.translate_string(opt_str_lst .. str_2)
+		ctrl:AddItem( game.translate_string(str), i)
+		
+		if content[i][1] == value then
+			idx = i
+		end
+	end
+	idx = idx or 1
+	--printf(path.." ".. idx)
+	local str_2 = content[idx][2] or tostring(content[idx][1])
+	local str = v.no_str and str_2 or game.translate_string(opt_str_lst .. str_2)
+	ctrl:enable_id( idx )
+	ctrl:SetText( game.translate_string(str) )
+	
+	-- Register
+	local id_ctrl = self:Stacker(path, opt, v)
+	
+	self:Register(ctrl, id_ctrl)
+	local _wrapper = function(handler) -- we need wrapper in order to pass ctrl to method
+		self:Callback_List(ctrl, path, opt, v)
+	end
+	self:AddCallback(id_ctrl, ui_events.LIST_ITEM_SELECT, _wrapper, self)
+	
+	return h
+end
+function UIMCM:Callback_List(ctrl, path, opt, v)
+	local i = ctrl:CurrentID()
+	local content = self:GetContent(path, opt, v)
+	self:CacheValue(path, opt, content[i][1], v)
+end
+
+function UIMCM:Register_Input(xml, handler, path, opt, v, flags)
+	local id = cc(path , opt)
+	
+	-- Caption
+	local h = self:Register_Cap(xml, handler,  id, v.hint)
+	
+	-- Apply to all button
+	if flags.apply_to_all and flags.group then
+		self:Register_BtnAll(xml, handler, path, opt, v, flags)
+	end
+	
+	-- Create control
+	local ctrl = xml:InitEditBox("elements:input",handler)
+	if (ctrl:GetHeight() > h) then
+		h = ctrl:GetHeight()
+	end
+	
+	-- Get values
+	local value = self:GetValue(path, opt, v, flags)
+	ctrl:SetText(value)
+	
+	-- Register
+	local id_ctrl = self:Stacker(path, opt, v)
+	
+	self:Register(ctrl, id_ctrl)
+	local _wrapper = function(handler) -- we need wrapper in order to pass ctrl to method
+		self:Callback_Input(ctrl, path, opt, v)
+	end
+	self:AddCallback(id_ctrl, ui_events.EDIT_TEXT_COMMIT, _wrapper, self)
+	
+	return h
+end
+function UIMCM:Callback_Input(ctrl, path, opt, v)
+	local value = ctrl:GetText()
+	if not (value and value ~= "") then
+		ctrl:SetText( self:GetCurrentValue(path, opt, v) or self:GetDefaultValue(path, opt, v) )
+		return
+	end
+	
+	if (v.val == 2) then
+		value = tonumber(value)
+		if (not value) then
+			ctrl:SetText( self:GetCurrentValue(path, opt, v) or self:GetDefaultValue(path, opt, v) )
+			return
+		end
+		value = clamp(value, v.min, v.max)
+	end
+	
+	self:CacheValue(path, opt, value, v)
+	ctrl:SetText(value)
+end
+
+function UIMCM:Register_Track(xml, handler, path, opt, v, flags)
+	local id = cc(path , opt)
+	
+	-- Caption
+	local h = self:Register_Cap(xml, handler,  id, v.hint)
+	
+	-- Apply to all button
+	if flags.apply_to_all and flags.group then
+		self:Register_BtnAll(xml, handler, path, opt, v, flags)
+	end
+	
+	-- Create control
+	self._Track[id] = {}
+	self._Track[id].ctrl = xml:InitTrackBar("elements:track",handler)
+	self._Track[id].path = path
+	self._Track[id].opt = opt
+	if (self._Track[id].ctrl:GetHeight() > h) then
+		h = self._Track[id].ctrl:GetHeight()
+	end
+	
+	self._Track[id].txt = xml:InitTextWnd("elements:track_value",handler)
+	
+	-- Get values
+	local value = self:GetValue(path, opt, v, flags)
+	value = clamp(value, v.min, v.max)
+	value = round_idp(value, v.prec or precision)
+	
+	local int = false --is_int(value) and is_int(v.step) and is_int(v.min) and is_int(v.max)
+	self._Track[id].value = value -- temp
+	self._Track[id].ctrl:SetInvert(v.invert and true or false)
+	self._Track[id].ctrl:SetStep(v.step)
+	if int then
+		self._Track[id].ctrl:SetOptIBounds(v.min, v.max)
+		self._Track[id].ctrl:SetIValue(value)
+	else
+		self._Track[id].ctrl:SetOptFBounds(v.min, v.max)
+		self._Track[id].ctrl:SetFValue(value)
+	end
+	if (not v.no_str) then
+		self._Track[id].txt:SetText(value)
+	end
+	
+	return h
+end
+function UIMCM:Callback_Track(ctrl, path, opt, v, value)
+	if (not v.no_str) then
+		ctrl:SetText(value)
+	end
+	self:CacheValue(path, opt, value, v)
+end
+
+function UIMCM:Register_Radio(xml, handler, path, opt, v, typ, flags)
+	local id = cc(path , opt)
+
+	-- Caption
+	local h = self:Register_Cap(xml, handler,  id, v.hint)
+	
+	-- Apply to all button
+	if flags.apply_to_all and flags.group then
+		self:Register_BtnAll(xml, handler, path, opt, v, flags)
+	end
+	
+	-- Determine type
+	local str = typ and "horz" or "vert"
+	local content = self:GetContent(path, opt, v)
+	local num = #content
+	if num > 8 and (not v.force_horz) then
+		typ = false
+		str = "vert"
+	end
+	
+	-- Create control
+	local frame = xml:InitStatic("elements:radio_" .. str, handler)
+	local ctrl = {}
+	local txt
+	local offset = typ and m_floor(frame:GetWidth()/num) or 30
+	local h_factor = typ and 1 or 0
+	local v_factor = typ and 0 or 1
+	local h1, h2 = 0, 0
+	--printf("offset: %s - h_factor: %s - v_factor: %s - num: %s", offset, h_factor, v_factor, num)
+	for i=1,num do 
+	
+		-- Buttons
+		ctrl[i] = xml:InitCheck("elements:radio_" .. str .. ":btn", frame)
+		local pos = ctrl[i]:GetWndPos()
+		h1 = (h1 * v_factor) + ctrl[i]:GetHeight()
+		ctrl[i]:SetWndPos(vector2():set( pos.x + ((i-1) * offset * h_factor) , pos.y + ((i-1) * offset * v_factor) ))
+		
+		-- Text
+		txt = xml:InitTextWnd("elements:radio_" .. str .. ":txt", frame)
+		local pos2 = txt:GetWndPos()
+		h2 = h_factor * txt:GetHeight()
+		txt:SetWndPos(vector2():set( pos2.x + ((i-1) * offset * h_factor) , pos2.y - (v_factor * 30) + ((i-1) * offset * v_factor) ))
+		local str_2 = content[i][2] or tostring(content[i][1])
+		local str = v.no_str and game.translate_string(str_2) or game.translate_string(opt_str_lst .. str_2)
+		txt:SetText( str )
+		
+		if (h1 + h2 > h) then
+			h = h1 + h2
+		end
+	end
+	
+	-- Get values
+	local value = self:GetValue(path, opt, v, flags)
+	
+	local id_ctrl = self:Stacker(path, opt, v)
+	for i=1,num do 
+		if (content[i][1] == value) then
+			ctrl[i]:SetCheck(true)
+		else
+			ctrl[i]:SetCheck(false)
+		end
+		
+		-- Register
+		self:Register(ctrl[i], id_ctrl .. i)
+		local _wrapper = function(handler) -- we need wrapper in order to pass ctrl to method
+			self:Callback_Radio(ctrl, path, opt, v, i)
+		end
+		self:AddCallback(id_ctrl .. i, ui_events.BUTTON_CLICKED, _wrapper, self)
+	end
+	
+	return h
+end
+function UIMCM:Callback_Radio(ctrl, path, opt, v, n)
+	local value = ctrl[n]:GetCheck()
+	--printf("n = %s", n)
+	if value then
+		for i=1,#ctrl do
+			if i ~= n then
+				ctrl[i]:SetCheck(false)
+			end
+		end
+		
+		local content = self:GetContent(path, opt, v)
+		self:CacheValue(path, opt, content[n][1], v)
+	else
+		ctrl[n]:SetCheck(true)
+	end
+end
+
+function UIMCM:Register_BtnAll(xml, handler, path, opt, v, flags)
+	local ctrl = xml:Init3tButton("elements:btn_all",handler)
+	xml:InitStatic("elements:cap_all",handler)
+	
+	local id_ctrl = self:Stacker(path, opt, v)
+	
+	self:Register(ctrl, id_ctrl)
+	local _wrapper = function(handler) -- we need wrapper in order to pass ctrl to method
+		self:Callback_BtnAll(ctrl, path, opt, v, flags)
+	end
+	self:AddCallback(id_ctrl, ui_events.BUTTON_CLICKED, _wrapper, self)
+end
+function UIMCM:Callback_BtnAll(ctrl, path, opt, v, flags)
+	local id = cc(path , opt)
+	local group = flags.group
+	local value = self:GetValue(path, opt, v, flags)
+	
+	-- Set same value for identical options of same group
+	local function set_in_group(p, group, path, opt, value)
+		print_dbg("~set_in_group | current path: %s - target opt: %s", path, opt)
+		for i=1,#p do
+			local path_ext = path and (path ~= "") and cc(path , p[i].id) or p[i].id
+			if p[i].sh then
+				print_dbg("~set_in_group | current path: %s - target opt: %s", path_ext, opt)
+				if (p[i].id_gr == group) then
+					local gr = p[i].gr
+					for j=1,#gr do
+						if gr[j].id == opt then
+							local id_ext = cc(path_ext , opt)
+							if check_opt_table(id_ext) then
+								print_dbg("-set_in_group | Found match: %s", id_ext)
+								self:CacheValue(path_ext, opt, value, gr[j])
+							end
+						end
+					end
+				end
+			else
+				set_in_group(p[i].gr, group, path_ext, opt, value)
+			end
+		end
+	end
+	set_in_group(options, group, "", opt, value)
+end
+
+function UIMCM:Register_Preset(ct)
+	if ct.presets then
+		self.preset:ClearList()
+		-- 
+		for i=1,#ct.presets do
+			self.preset:AddItem( game.translate_string(opt_str_prst .. ct.presets[i]), i)
+		end
+		if (ct.curr_preset) then
+			self.preset:SetText( game.translate_string(opt_str_prst .. ct.curr_preset) )
+		end
+		self.preset:Show(true)
+		self.preset_cap:Show(true)
+	else
+		self.preset:ClearList()
+		self.preset:Show(false)
+		self.preset_cap:Show(false)
+	end
+end
+function UIMCM:Callback_Preset()
+	if not (self.last_curr_tree and self.last_path) then
+		return
+	end
+	
+	local txt = self.preset:GetText()
+	if not (txt and txt ~= "") then
+		return
+	end
+	
+	-- Retrieve the preset section
+	local pres
+	local presets = self.last_curr_tree.presets
+	for i=1,#presets do
+		if game.translate_string(opt_str_prst .. presets[i]) == txt then
+			pres = presets[i]
+			break
+		end
+	end
+	
+	if pres and ini_pres:section_exist(pres) then
+		self.last_curr_tree.curr_preset = pres
+		--self:Reset_opt(self.last_curr_tree, self.last_path, { preset = pres })
+		
+		local n = ini_pres:line_count(pres)
+		local result, id, value
+		for i=0,n-1 do
+			result, id, value = ini_pres:r_line_ex(pres,i,"","")
+			
+			-- Validate option
+			local v = get_opt_table(id)
+			if v and v.type then
+			
+				-- No need to modify options that can't be seen
+				local to_hide = v.precondition and (not exec(unpack(v.precondition)))
+				if (not to_hide) then
+				
+					-- Get proper value
+					if v.val == 0 then
+						
+					elseif v.val == 1 then
+						value = (value == "true") and true or false
+					elseif v.val == 2 then
+						value = tonumber(value)
+					end
+					
+					-- Extract path and opt
+					local t = str_opt_explode(id)
+					local opt = t[#t]
+					local path = t[1]
+					for i=2,#t-1 do
+						path = cc(path , t[i])
+					end
+					
+					-- Cache changes
+					self:CacheValue(path, opt, value, v)
+				end
+			end
+		end
+		
+		-- Update XML elements
+		self:Reset_opt(self.last_curr_tree, self.last_path)
+		
+		-- Update state
+		self:UpdatePending()
+	end
+end
+
+function UIMCM:Register_Tree(tr, path, group, idx)
+	print_dbg("-Register_Tree | tr: %s - path: %s", tr, path)
+	local xml = self.xml
+	
+	if (not self.tree[tr]) then
+		self.tree[tr] = {}
+	end
+
+	if (not self.tree[tr][path]) then
+		self.tree[tr][path] = xml:InitScrollView("main:tree_" .. tr, self.dialog)
+		
+		--[[
+		local pos = self.tree[tr][path]:GetWndPos()
+		if tr == 3 then idx = 1 end
+		self.tree[tr][path]:SetWndPos(vector2():set( pos.x , pos.y + (25*(idx-1)) ))
+		--]]
+		
+		if (not self.bl[tr]) then
+			self.bl[tr] = {}
+		end
+		
+		self.bl[tr][path] = {}
+		
+		-- Fill tree
+		for i=1,#group do
+			local _st = xml:InitStatic("main:st_tree", nil)
+			
+			self.bl[tr][path][i] = xml:InitCheck("elements:btn_list", _st)
+			self.bl[tr][path][i]:SetCheck(false)
+			
+			local txt = xml:InitTextWnd("elements:txt_list", _st)
+			txt:SetText( game.translate_string(group[i].text or opt_str_menu .. group[i].id) )
+			txt:SetTextColor( clr_tree[tr] )
+			
+			self.tree[tr][path]:AddWindow(_st, true)
+			_st:SetAutoDelete(false)
+		end
+		
+		-- Set Callback for tree buttons
+		for i=1,#self.bl[tr][path] do
+			local path_i = (path ~= "") and cc(path , group[i].id) or group[i].id
+			
+			self:Register(self.bl[tr][path][i], ("tree_"..path_i))
+			local _wrapper = function(handler) -- we need wrapper in order to pass ctrl to method
+				self:Callback_Tree(tr, path_i, group[i], self.bl[tr][path], i)
+			end
+			self:AddCallback(("tree_"..path_i), ui_events.BUTTON_CLICKED, _wrapper, self)
+		end
+	end
+	
+	self.tree[tr][path]:Show(true)
+	
+	self.bl[tr][path][1]:SetCheck(true)
+	local path_1 = (path ~= "") and cc(path , group[1].id) or group[1].id
+	self:Callback_Tree(tr, path_1, group[1], self.bl[tr][path], 1)
+end
+function UIMCM:Callback_Tree(tr, path, group, ctrl, i)
+	print_dbg("-Callback_Tree | tr: %s - path: %s - index: %s", tr, path, i)
+	
+	-- Radio buttons behavior
+	if (ctrl[i]:GetCheck() == false) then
+		ctrl[i]:SetCheck(true)
+		return
+	end
+	for k=1,#ctrl do
+		if k ~= i then
+			ctrl[k]:SetCheck(false)
+		end
+	end
+	
+	-- Hide all sub trees
+	for k=tr+1,#self.tree do
+		for _,v in pairs(self.tree[k]) do
+			v:Show(false)
+		end
+	end
+		
+	-- If its an option list, show it
+	if group.sh then
+		self:Reset_opt(group, path)
+		
+		-- Caching current options
+		self.last_path = path
+		if (not self.last_curr_tree) then
+			self.last_curr_tree = {}
+		end
+		empty_table(self.last_curr_tree)
+		copy_table(self.last_curr_tree, group)
+		
+	else
+		self:Register_Tree(tr+1, path, group.gr, i)
+	end
+end
+
+
+------------------------------------------------------------
+-- Utilities
+------------------------------------------------------------
+function UIMCM:GetValue(path, opt, v, flags)
+-- NOTE: make sure to check for nil values only, since false exists as legit value for commands and check boxes
+
+	local value
+	
+	if flags and flags.def then
+		value = self:GetDefaultValue(path, opt, v)
+		
+	elseif flags and flags.preset then
+		local pres = flags.preset
+		local id = cc(path , opt)
+		
+		if v.val == 0 then
+			value = ini_pres:r_string_ex(pres, id)
+		elseif v.val == 1 then
+			value = ini_pres:r_bool_ex(pres, id)
+		elseif v.val == 2 then
+			value = ini_pres:r_float_ex(pres, id)
+		end
+	end
+	
+	if (value ~= nil) or (flags and flags.def) then
+		if (value ~= nil) and (v.type == "track") then
+			value = clamp(value, v.min, v.max)
+		end
+		self:CacheValue(path, opt, value, v)
+	end
+	if (value == nil) then
+		value = self:GetCurrentValue(path, opt, v)
+	end
+	if (value == nil) then
+		value = self:GetDefaultValue(path, opt, v)
+	end
+	
+	if (value ~= nil) and (v.type == "track") then
+		value = clamp(value, v.min, v.max)
+	end
+	
+	return value
+end
+
+function UIMCM:GetDefaultValue(path, opt, v)
+	local id = cc(path , opt)
+	local value
+	
+	if (type(v.def) == "table") then
+		value = exec(unpack(v.def))
+	else
+		value = v.def
+	end
+	
+	-- We cache default values for the first time, so current values rely on them up later
+	-- because some default values are randomized and player might not touch them, thus causing randomized effects where they are used in-game
+	if (axr_main.config:r_value(opt_section, id, v.val) == nil) and (value ~= nil) then
+		axr_main.config:w_value(opt_section, id, value)
+		self.Save_AXR = true
+	end
+	
+	return value
+end
+
+function UIMCM:GetCurrentValue(path, opt, v)
+	local id = cc(path , opt)
+	
+	if (opt_temp[id] ~= nil) then
+		local _id = s_gsub(id, _opt_, "_")
+		if self._Cap[_id] and self._Cap[_id]:IsShown() then
+			self._Cap[_id]:TextControl():SetTextColor( clr_o )
+		end
+		
+		return opt_temp[id]
+	end
+	
+	local value
+	if v.curr then
+		value = exec(unpack(v.curr))
+	elseif v.cmd then
+		if v.val == 0 then
+			value = get_console_cmd(0, v.cmd)
+		elseif v.val == 1 then
+			value = get_console_cmd(1, v.cmd)
+		elseif v.val == 2 then
+			value = get_console_cmd(0, v.cmd) --get_console_cmd(2, v.cmd) -- some commands are integers, using get_float will return 0. This is a walkaround
+			value = tonumber(value)
+			if v.min and v.max then
+				value = clamp(value, v.min, v.max)
+			end
+			value = round_idp(value, v.prec or precision)
+		end
+	
+	else
+		value = axr_main.config:r_value(opt_section, id, v.val)
+	end
+
+	return value
+end
+
+function UIMCM:GetContent(path, opt, v)
+	if v.cmd and (not v.content) then
+		local value
+		if v.val == 0 then
+			value = get_console_cmd(0, v.cmd)
+		elseif v.val == 1 then
+			value = get_console_cmd(1, v.cmd)
+		elseif v.val == 2 then
+			value = get_console_cmd(0, v.cmd)	--get_console_cmd(2, v.cmd)
+			value = tonumber(value)
+			if v.min and v.max then
+				value = clamp(value, v.min, v.max)
+			end
+			value = round_idp(value, v.prec or precision)
+		end
+		return {{value,tostring(value)}}
+		
+	elseif (type(v.content[1]) == "function") then
+		return exec(unpack(v.content))
+	else
+		return v.content
+	end
+end
+
+function UIMCM:GetOption(id)
+	
+	local t = str_explode(id,_opt_ )
+	local v = options
+	for i=1,#t do
+		for j=1,#v do
+			if v[j].id == t[i] then
+				if i == #t then
+					v = v[j]
+				else
+					v = v[j].gr
+				end
+				break
+			end
+		end
+	end
+	return v
+end
+
+function UIMCM:CacheValue(path, opt, value, v)
+	local id = cc(path , opt)
+	
+	-- Do a backup of current values first
+	if (opt_backup[id] == nil) then
+		opt_backup[id] = self:GetValue(path, opt, v)
+		print_dbg("# Backup [%s] = %s", id, opt_backup[id])
+	end
+	
+	-- Cache changed values
+	if (value ~= nil) and (value ~= opt_backup[id]) then
+		opt_temp[id] = value
+		print_dbg("/ Cached [%s] = %s", id, value)
+	else
+		opt_temp[id] = nil -- no need to cache current values
+		print_dbg("~ Cleared cache [%s]", id)
+	end
+	
+	-- Change text color
+	local _id = s_gsub(id, _opt_, "_")
+	if self._Cap[_id] and self._Cap[_id]:IsShown() then
+		if (opt_temp[id] ~= nil) and (opt_temp[id] ~= opt_backup[id]) then
+			self._Cap[_id]:TextControl():SetTextColor( clr_o )
+		else
+			self._Cap[_id]:TextControl():SetTextColor( clr_g1 )
+		end
+	end
+	
+	-- Update state
+	self:UpdatePending()
+end
+
+function UIMCM:Stacker(path, opt, v)
+-- This assure that each time a control is created, an unique callback id is given to it
+-- Why? because in normal case, jumping between options removes the previous ones constantly, getting back to them will create new controls and assign them to the old ids
+-- This is bad because callbacks are still attached to the old controls, any fresh controls that get assigned to those ids will be inactive as a result
+-- My solution is this function to generate unique id each time a control is created
+
+	if (not v.stack) then v.stack = 0 end
+	v.stack = v.stack + 1
+	
+	return cc( cc(path , opt) , v.stack)
+end
+
+function UIMCM:UpdatePending()
+	local size = size_table(opt_temp)
+	if size > 0 then
+		self.pending:SetText( strformat( game.translate_string("ui_mm_warning_pending"), size) )
+	else
+		self.pending:SetText("")
+	end
+end
+
+
+------------------------------------------------------------
+-- Callbacks
+------------------------------------------------------------
+function UIMCM:OnButton_Accept()
+	--if self.Need_VidRestart then
+	--	self.message_box:InitMessageBox("message_box_yes_no")
+	--	self.message_box:SetText(string.format("%s %d% s", game.translate_string("ui_mm_confirm_changes"), 15, game.translate_string("mp_si_sec")))
+	--	self.message_box:ShowDialog(true)
+	--else
+		self:On_Accept()
+	--end
+end
+
+function UIMCM:OnButton_Reset()
+	if self.last_path and self.last_curr_tree and is_not_empty(opt_temp) then
+		local to_reset
+		for id, val in pairs(opt_temp) do
+			if s_find(id,self.last_path) then
+				to_reset = true
+				opt_temp[id] = nil
+				
+				local _id = s_gsub(id, _opt_, "_")
+				if self._Cap[_id] and self._Cap[_id]:IsShown() then
+					self._Cap[_id]:TextControl():SetTextColor( clr_g1 )
+				end
+			end
+		end
+		
+		if (to_reset) then
+			self:UpdatePending()
+			self:Reset_opt(self.last_curr_tree, self.last_path)
+		end
+	end
+	
+	if self.dlg_controls and self.dlg_controls:IsShown() then
+		local opt				= COptionsManager()
+		opt:SetCurrentValues	("key_binding")
+	end
+end
+
+function UIMCM:OnButton_Default()
+	if self.last_path and self.last_curr_tree then
+		self:Reset_opt(self.last_curr_tree, self.last_path, { def = true })
+	end
+	
+	if self.dlg_controls and self.dlg_controls:IsShown() then
+		exec_console_cmd("default_controls")
+	
+		local opt				= COptionsManager()
+		opt:SetCurrentValues	("key_binding")
+	end
+end
+
+function UIMCM:OnButton_Cancel()
+	if is_not_empty(opt_temp) then
+		self.message_box:InitMessageBox("message_box_yes_no")
+		self.message_box:SetText(game.translate_string("ui_mm_discard_changes"))
+		self.message_box:ShowDialog(true)
+	else
+		self:On_Cancel()
+	end
+end
+
+function UIMCM:On_Accept()
+	for id, val in pairs(opt_temp) do
+	
+		local v = self:GetOption(id)
+		
+		-- Cache the changes
+		if (not v.curr) then
+			print_dbg("- Saved [%s] := %s", id, val)
+			axr_main.config:w_value(opt_section, id, val)
+			self.Save_AXR = true
+		end
+		
+		self.Change_Done = true
+		
+		-- Execute functors if found
+		if v.functor then
+			if v.postcondition then
+				if exec(unpack(v.postcondition))then
+					print_dbg("- Executing postcondition functor of [%s]",id)
+					exec(unpack(v.functor))
+				end
+			else
+				print_dbg("- Executing functor of [%s]",id)
+				exec(unpack(v.functor))
+			end
+		end
+		
+		-- See if it needs restart
+		if v.restart then
+			self.Need_Restart = true
+		end
+		if v.vid then
+			self.Need_VidRestart = true
+		end
+		
+		-- Send callback and apply changes
+		if v.cmd then
+			local cmd_value = val
+			if type(cmd_value) == "boolean" then
+				if v.bool_to_num then
+					cmd_value = cmd_value and "1" or "0"
+				else
+					cmd_value = cmd_value and "on" or "off"
+				end
+			end
+			
+			print_dbg("- Saved CMD [%s] := %s", id, cmd_value)
+			exec_console_cmd(v.cmd .. " " .. cmd_value)
+			self.Save_CFG = true
+		end
+	end
+	
+	-- Save axr_options
+	if self.Save_AXR then
+		axr_main.config:save()
+		self.Save_AXR = false
+	end
+	
+	-- Save keybinds
+	if self.Keybinds_Shown then
+		local opt		= COptionsManager()
+		opt:SaveValues("key_binding")
+		opt:OptionsPostAccept()
+		self.Save_CFG = true
+	end
+	
+	print_dbg("~ Change done: %s | Game restart: %s | Vid restart: %s | Save AXR: %s | Save CFG: %s | Keybinds: %s", self.Change_Done, self.Need_Restart, self.Need_VidRestart, self.Save_AXR, self.Save_CFG, self.Keybinds_Shown)
+	
+	-- appdata
+	if self.Save_CFG then
+		print_dbg("- Saved CFG")
+		exec_console_cmd("cfg_save")
+		--exec_console_cmd("cfg_save tmp")
+	end
+
+	if level.present() and self.Change_Done then
+		print_dbg("% Sent callback (on_option_change)")
+		SendScriptCallback("on_option_change")
+	end
+	
+	-- Clear cache
+	empty_table(opt_temp)
+	empty_table(opt_backup)
+	
+	-- Exit
+	self:On_Cancel()
+end
+
+function UIMCM:On_Cancel()
+
+	self.owner:ShowDialog(true)
+	self:HideDialog()
+	self.owner:Show(true)
+	
+	-- Restart vid
+	if self.Need_VidRestart then
+		exec_console_cmd("vid_restart")
+	end
+	
+	if self.Need_Restart then
+		self.owner:SetMsg( game.translate_string("ui_mm_change_done_restart") , 7 )
+		self.message_box:InitMessageBox("message_box_restart_game")
+		self.message_box:ShowDialog(true)
+		
+	elseif self.Change_Done then
+		self.owner:SetMsg( game.translate_string("ui_mm_change_done") , 5 )
+	end
+	
+	self.Change_Done = false
+	self.Need_VidRestart = false
+	self.Need_Restart = false
+	self.Save_CFG = false
+	self.Keybinds_Shown = false
+	
+	Unregister_UI("UIMCM")
+end
+
+function UIMCM:On_Discard()
+	empty_table(opt_temp)
+	if (self.last_path and self.last_curr_tree) then
+		self:UpdatePending()
+		self:Reset_opt(self.last_curr_tree, self.last_path)
+	end
+	self:On_Cancel()
+end
+
+function UIMCM:OnKeyboard(dik, keyboard_action)
+	local res = CUIScriptWnd.OnKeyboard(self,dik,keyboard_action)
+	if (res == false) then
+		local bind = dik_to_bind(dik)
+		if keyboard_action == ui_events.WINDOW_KEY_PRESSED then
+		
+			if dik == DIK_keys.DIK_ESCAPE then
+				self:OnButton_Cancel()
+			end
+
+		end
+	end
+
+	return res
+end
+
+
+------------------------------------------------------------
+-- Keybinds
+------------------------------------------------------------
+class "mcm_controls" (CUIWindow)
+
+function mcm_controls:__init() super()
+end
+
+function mcm_controls:__finalize()
+
+end
+
+function mcm_controls:InitControls(x, y, xml, handler)
+
+	self:SetWndPos(vector2():set(x,y))
+	self:SetWndSize(vector2():set(738,416))
+
+	self:SetAutoDelete(true)
+
+--	self.bk = xml:InitFrame("frame", self)
+
+	xml:InitFrameLine	("tab_controls:cap_keyboardsetup",		self)
+	xml:InitFrameLine	("tab_controls:cap_keyboardsetup",		self)
+	xml:InitKeyBinding	("tab_controls:key_binding",			self)
+end
+
+function trader_cond(x)
+	if x == 'get' then
+		-- printf('@@@ returning %s', alife_storage_manager.get_state().trader_buy_condition_override or "0 (DEFAULT)")
+		return alife_storage_manager.get_state().trader_buy_condition_override or 0
+	else
+		-- printf('@@@ setting %s', opt_temp["gameplay/economy_diff/condition_buy_override"] or '0 (DEFAULT)')
+		alife_storage_manager.get_state().trader_buy_condition_override = opt_temp["gameplay/economy_diff/condition_buy_override"] or 0
+	end
+end
+
+function store_in_save()
+	printf("MCM Error: dph_mcm_save_storage.script not found")
+end
+
+if dph_mcm_save_storage and dph_mcm_save_storage.register_module then
+	store_in_save = dph_mcm_save_storage.register_module
+end
+
+
+
+------------------------------------------------------------
+-- Tutorial:Table of Contents:
+------------------------------------------------------------
+--[[
+	Use the [-] in the margin in notpad++ to colapse sections for easier
+	navigation
+	
+	1. How to read these options in your script (RavenAscendant)
+	2. How to add new options (Tronex orginal turotial from ui_options)
+	3. How to make your script talk to MCM
+	4. Examples
+
+]]--
+
+------------------------------------------------------------
+-- Tutorial: How to read these options in your script:
+------------------------------------------------------------
+--[[
+	Feilds in [backets]  are described in "How to add new options"
+	
+	First a bit about setting up your options. Nine times out of ten you don't need any functors.
+		MCM will read the curent value of the setting from axr_options with out a [curr] functor and
+		will write values to axr_options if no [functor] is provided. For simple global settings this 
+		will be more than adequate.
+	
+	The easiest way to read your setting is call ui_mcm.get(path) where path is the id fields of 
+		the nested tables down to the option in the table you returned in on_mcm_load() . Mostlikely 
+		this will take the form of "modname/settingname"  but you can break your settings into multiple
+		panels if you want resulting in a loinger path. see the options section of axr_configs for how 
+		anomaly options menu translates into paths, same system is used here.
+		ui_mcm.get(path) is cached and fails back to the value you set in [def=] 
+	
+	Just like ui_options when MCM applies a settings change it sends an on_option_change callback
+		you can use this to do a one time read of your options into variables in your script.
+		you can either get the values with ui_mcm.get(path) or read them directly from axr_configs
+		like so:
+			axr_main.config:r_value("mcm", path, type,default) --see _g for how r_value functions.
+	
+	
+	Examples of when you might want to use functors: 
+		Saving mod settings to the save game file instead of globaly to axr_configs
+		You are building your settings dynaicaly can't rely on the path being consistant.
+		You otherwise like to over complicate things.
+
+]]--
+
+
+------------------------------------------------------------
+-- Tutorial: How to add new options:
+------------------------------------------------------------
+--[[
+
+	The only thing changed from this as compared to the version in ui_options is changing all ocurances of ui_mm_ to ui_mcm_ 
+	------------------------------------------------------------------------------------------------
+	Option name:
+		script will read option name (id) and show it automatically, naming should be like this: "ui_mcm_[tree_1]_[tree_2]_[tree_...]_[option]"
+		[tree_n] and [option] are detemined from option path inside the table
+			Example: options["video"]["general"]["renderer"] name will come from "ui_mcm_video_general_renderer" string
+			
+	------------------------------------------------------------------------------------------------
+	Option description:
+		option description can show up in the hint window if its defined by its name followed by "_desc"
+			Example: option with a name of "ui_mcm_video_general_renderer" will show its hint if "ui_mcm_video_general_renderer_desc" exists
+		
+	
+	------------------------------------------------------------------------------------------------
+	Parameters of option Tree:
+	------------------------------------------------------------------------------------------------
+	
+	- [id]
+	- Define: (string)
+		To give a tree its own identity
+	
+	- [sh]
+	- Define: (boolean)
+		used to detemine that the sub-tree tables are actual list of options to set and show
+		
+	- [text]
+	- Define: (string)
+		To over ride the display text for the tree in the tree select
+		
+	- [precondition]
+	- Define: ( table {function, parameters} )
+		don't show tree options if its precondition return false
+		
+	- [output]
+	- Define: (string)
+		Text to show when precondition fails
+		
+	- [gr]
+	- Define: ( table { ... } )
+		Table of a sub-tree or options list
+		
+	- [apply_to_all]
+	- Define: (boolean)
+		when you have options trees with similar options and group, you can use this to add "Apply to All" button to each option
+		clicking it will apply option changes to this option in all other trees from same group
+		you must give these a tree a group id
+		
+	- [id_gr]
+	- Define: (string)
+		allows you to give options tree a group id, to connect them when you want to use "Apply to all" button for options
+	
+	------------------------------------------------------------------------------------------------
+	Parameters of options:
+	------------------------------------------------------------------------------------------------
+	
+	----------------------
+	Critical parameters:
+	--------------------
+	These parameters must be declared for elements
+	
+	[id]
+	- Define: (string)
+		Option identity/name.
+		Option get stored in axr_main or called in other sripts by its path (IDs of sub trees and option):
+			Example: ( tree_1_id/tree_2_id/.../option_id ) 
+		The top id in the table you return to MCM (tree_1_id in the above example) should be as unique as 
+			posible to prevent it from conflicting with another mod.
+	
+	[type]
+	- Define: (string)
+	- Possible values:
+		- Option elements:
+				"check"        	: Option, check box, either ON or OFF
+				"list"         	: Option, list of strings, useful for options with too many selections
+				"input"        	: Option, input box, you can type a value of your choice
+				"radio_h"   	: Option, radio box, select one out of many choices. Can fit up to 8 selections (Horizental layout)
+				"radio_v"   	: Option, radio box, select one out of many choices. Can fit up any number of selections (Vertical layout)
+				"track"       	: Option, track bar, easy way to control numric options with min/max values (can be used only if [val] = 2)
+		- Support elements:
+				"line"         	: Support element, a simple line to separate things around
+				"image"    	   	: Support element, 563x50 px image box, full-area coverage
+				"slide"   		: Support element, image box on left, text on right
+				"title"   		: Support element, title (left/right/center alignment)
+				"desc"   		: Support element, description (left alignment)
+		
+	
+	----------------------
+	Dependable parameters:
+	----------------------
+	These parameters must be declared when other specific parameters are declared already. They work along with them
+		
+	[val]
+	- Define: (number)
+	- Used by: option elements: ALL
+		Option's value type: 0. string | 1. boolean | 2. float
+		It tells the script what kind of value the option is storing / dealing with
+
+	[cmd]:
+	- Define: (string)
+	- Used by: option elements: ALL (needed if you want to control a console command)
+		Tie an option to a console command, so when the option value get changed, it get applied directly to the command
+		The option will show command's current value 
+		NOTE:
+			cmd options don't get cached in axr_options, instead they get stored in appdata/user.ltx
+			[def] parameter is not needed here since we engine applies default values to commands if they don't exist in user.ltx automatically
+		
+	[def]
+	- Define: (boolean) / (number) / (string) / ( table {function, parameters} )
+	- Used by: option elements: ALL (not needed if [cmd] is used)
+		Default value of an option
+		when no cached values are found in axr_options, the default value will be used
+	
+	[min]
+	- Define: (number)
+	- Used by: option elements: "input" / "track": (only if [val] = 2)
+		Minimum viable value for an option, to make sure a value stays in range
+		
+	[max]
+	- Define: (number)
+	- Used by: option elements:  "input" / "track": (only if [val] = 2)
+		Maximum viable value for an option, to make sure a value stays in range
+		
+	[step]
+	- Define: (number)
+	- Used by: option elements: "track": (only if [val] = 2)
+		How much a value can be increased/decreased in one step
+		
+	[content]
+	- Define: ( table {double pairs} ) / ( table {function, parameters} )
+	- Used by: option elements: "list" / "radio_h" / "radio_v":
+		Delcares option's selection list
+		Pairs: { value of the selection, string to show on UI }
+			Example: content= { {0,"off"} , {1,"half"} , {2,"full"}}
+			So the list or radio option will show 3 selections (translated strings): (ui_mcm_lst_off) and (ui_mcm_lst_half) and (ui_mcm_lst_full)
+			When you select one and it get applied, the assosiated value will get applied
+			So picking the first one will pass ( 0 )
+		Because all lists and radio button elements share the same prefix, "ui_mcm_lst_" it is important that you not use common words like
+			the ones in the example above. Make your element names unique.
+		
+	[link]
+	- Define: (string)
+	- Used by: support elements: "image" / "slide"
+		Link to texture you want to show
+		
+	[text]
+	- Define: (string)
+	- Used by: support elements: "slide" / "title" / "desc"
+		String to show near the image, it will be translated
+		
+	----------------------
+	Optional parameters:
+	----------------------
+	These parameters are completely optionals, and can be used for custom stuff
+	
+	[force_horz]
+	- Define: (boolean)
+	- Used by: option elements: "radio_h"
+		Force the radio buttons into horizental layout, despite their number
+		
+	[no_str]
+	- Define: (boolean)
+	- Used by: option elements: "list" / "radio_h" / "radio_v" / "track"
+		Usually, the 2nd key of pairs in content table are strings to show on the UI, by translating "opt_str_lst_(string)"
+		when we set [no_str] to true, it will show the string fromm table as it is without translations or "opt_str_lst_"
+		For TrackBars: no_str won't show value next to the slider
+		
+	[prec]
+	- Define: (number)
+	- Used by: option elements: "track"
+		allowed number of zeros in a number
+		
+	[precondition]
+	- Define: ( table {function, parameters} )
+	- Used by: option elements: ALL
+		Show the option on UI if the precondition function returns true
+	
+	[functor]
+	- Define: ( table {function, parameters} )
+	- Used by: option elements: ALL
+		Execute a function when option's changes get applied
+		
+	[postcondition]
+	- Define: ( table {function, parameters} )
+	- Used by: option elements: ALL, with defined [functor]
+		Option won't execute its functor when changes are applied, unless if the postcondition function returns true
+
+	[curr]
+	- Define: ( table {function, parameters} )
+	- Used by: option elements: ALL
+		get current value of an option by executing the declared function, instead of reading it from axr_options.ltx
+		
+	[hint]
+	- Define: (string)
+	- Used by: option elements: ALL
+		Override default name / desc rule to replace the translation of an option with a custom one, should be set without "ui_mcm_" and "_desc"
+			Example: { hint = "alife_warfare_capture"} will force the script to use "ui_mcm_alife_warfare_capture" and "ui_mcm_alife_warfare_capture_desc" for name and desc of the option
+	
+	[clr]
+	- Define: ( table {a,r,b,g} )
+	- Used by: support elements: "title" / "desc"
+		determines the color of the text
+		
+	[stretch]
+	- Define: (boolean)
+	- Used by: support elements: "slide"
+		force the texture to stretch or not
+		
+	[pos]
+	- Define: ( table {x,y} )
+	- Used by: support elements: "slide"
+		custom pos for the texture
+		
+	[size]
+	- Define: ( table {w,z} )
+	- Used by: support elements: "slide"
+		custom size for the texture
+		
+	[align]
+	- Define: (string) "l" "r" "c"
+	- Used by: support elements: "title"
+		determines the alignment of the title
+		
+	[spacing]
+	- Define: (number)
+	- Used by: support elements: "slide"
+		hight offset to add extra space
+--]]
+
+------------------------------------------------------------
+-- Tutorial: How to make your script talk to MCM:
+------------------------------------------------------------
+
+--[[
+	MCM looks for scripts with names ending in mcm: *mcm.script you can use an _ to sperate it from the 
+		rest of the name of your script but it isn't necessary.
+	In those scripts MCM will execute the function on_mcm_load()
+	In order for options to be added to MCM, on_mcm_load() must return a valid options tree
+		as described in the tutorial here, used in the ui_options script and shown in the examples below
+	An aditioanl retun value of a string naming a collection is optional. The string will be used to create a catagory to which the	
+		the options menues of mods returning the same collection name will be added to. This is to allow for 
+		modular mods to have the settings for each module be grooped under a common heading. Note the collection name becomes the root
+		name in your settings path and translation strings. As a root name care should be taken to ensure it will not conflict with another 
+		mod.
+
+	
+]]--
+
+---------------------------------------------------------------------------------------
+-- Tutorial: Using : dph-hcl's script for save game specific MCM options
+---------------------------------------------------------------------------------------
+
+--[[
+	dph-hcl's orginal script from https://www.moddb.com/mods/stalker-anomaly/addons/151-mcm-13-mcm-savefile-storage 
+		is included un altered and can be used as described and documented in thier mod and script
+	
+	Aditionaly for convinence the function has been aliased here as ui_mcm.store_in_save(path)
+		this function can be called safely as MCM will simply print an error if dph-hcl's script is missing
+
+	To make an option be stored in a save game instead of globaly call ui_mcm.store_in_save(path)
+	 	path can be a full option path like is used by ui_mcm.get(path) or a partial path
+	If a partial path is used all options that caontain that path will be stored in the savegame
+		partial paths must start with a valid root and cannot end with a /
+
+	In the second example below the second checkbox in the second options menu would be stored buy
+		ui_mcm.store_in_save("example_example/example_two/2check2")
+	In the same example storing all options (both checks) in the first option menu would be:
+		ui_mcm.store_in_save("example_example/example_one")
+	Lastly storing all of the options for your mod would look like: 
+		ui_mcm.store_in_save("example_example")
+	
+	ui_mcm.store_in_save(path) can be called at any time. The easyiest is probably in on_mcm_load()
+		however it could be done as late as on_game_start() if one wanted to have an MCM option for global vs save specific options storing
+			(calling ui_mcm.get(path) in on_mcm_load() is a bad idea don't do that )
+]]--
+
+
+------------------------------------------------------------
+-- Tutorial: Examples:
+------------------------------------------------------------
+
+-- these examples can all be copied to a blank script example_mcm.script and ran.
+
+-- A simple menu with a title slide and check boxes.
+--[[
+
+	function on_mcm_load()
+		op = { id= "example_example"      	 	,sh=true ,gr={
+				{ id= "slide_example_example"				 ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_title_example_example"		,size= {512,50}		,spacing= 20 },
+				{id = "check1", type = "check", val = 1, def = false},
+				{id = "check2", type = "check", val = 1, def = false},
+				}
+			}
+			
+		return op
+	end
+]]--
+
+-- A a tree with a root containing three menues with a title slide and check boxes. 
+--[[
+
+	function on_mcm_load()
+		op =  { id= "example_example"      	 	, ,gr={
+			
+						{ id= "example_one"      	 	,sh=true ,gr={
+							{ id= "slide_example_example"				 ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_title_example_example"		,size= {512,50}		,spacing= 20 },
+							{id = "1check1", type = "check", val = 1, def = false},
+							{id = "1check2", type = "check", val = 1, def = false},
+							}
+						},
+						{ id= "example_two"      	 	,sh=true ,gr={
+							{ id= "slide_example_example"				 ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_title_example_example"		,size= {512,50}		,spacing= 20 },
+							{id = "2check1", type = "check", val = 1, def = false},
+							{id = "2check2", type = "check", val = 1, def = false},
+							}
+						},
+						{ id= "example_three"      	 	,sh=true ,gr={
+							{ id= "slide_example_example"				 ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_title_example_example"		,size= {512,50}		,spacing= 20 },
+							{id = "3check1", type = "check", val = 1, def = false},
+							{id = "3check2", type = "check", val = 1, def = false},
+							}
+						},
+					}
+				}
+					
+			
+		return op
+	end
+]]--
+
+-- Two scripts with a simple menu with a title slide and check boxes, that will be added to a collection named "collection_example"
+--[[
+	-- example1_mcm.script
+	function on_mcm_load()
+		op = { id= "first_example"      	 	,sh=true ,gr={
+				{ id= "slide_first_example"				 ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_title_first_example"		,size= {512,50}		,spacing= 20 },
+				{id = "check1", type = "check", val = 1, def = false},
+				{id = "check2", type = "check", val = 1, def = false},
+				}
+			}
+			
+		return op, "collection_example"
+	end
+	
+	-- example2_mcm.script.
+	function on_mcm_load()
+		op = { id= "second_example"      	 	,sh=true ,gr={
+				{ id= "slide_second_example"				 ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_title_second_example"		,size= {512,50}		,spacing= 20 },
+				{id = "check1", type = "check", val = 1, def = false},
+				{id = "check2", type = "check", val = 1, def = false},
+				}
+			}
+			
+		return op, "collection_example"
+	end
+]]--
+
