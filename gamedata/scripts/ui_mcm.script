@@ -1548,11 +1548,15 @@ function UIMCM:On_Accept()
 			if v.postcondition then
 				if exec(unpack(v.postcondition))then
 					print_dbg("- Executing postcondition functor of [%s]",id)
+					v.functor[#v.functor+1] = val
 					exec(unpack(v.functor))
+					v.functor[#v.functor] = nil
 				end
 			else
 				print_dbg("- Executing functor of [%s]",id)
+				v.functor[#v.functor+1] = val
 				exec(unpack(v.functor))
+				v.functor[#v.functor] = nil
 			end
 		end
 		
