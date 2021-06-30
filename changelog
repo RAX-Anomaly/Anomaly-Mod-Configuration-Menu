@@ -1,0 +1,6 @@
+1.0 test upload
+1.1 initial public release
+1.2 added pass by reference of options table
+1.3 fixed a bug carried forward from the original UI_options
+1.4 (first version on github) fixed a bug in the collections API that could cause a crash and simplified save specific options API
+1.5 improved functors 
