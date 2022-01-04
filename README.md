@@ -133,6 +133,7 @@ This is a copy of the Instructions located at the end of the sctipt.
 				"radio_h"   	: Option, radio box, select one out of many choices. Can fit up to 8 selections (Horizental layout)
 				"radio_v"   	: Option, radio box, select one out of many choices. Can fit up any number of selections (Vertical layout)
 				"track"       	: Option, track bar, easy way to control numric options with min/max values (can be used only if [val] = 2)
+				"key_bind"		: Option, button that registers a keypress after being clicked. (See suplimental instructions below)
 		- Support elements:
 				"line"         	: Support element, a simple line to separate things around
 				"image"    	   	: Support element, 563x50 px image box, full-area coverage
@@ -247,7 +248,7 @@ This is a copy of the Instructions located at the end of the sctipt.
 	- Used by: option elements: ALL
 		get current value of an option by executing the declared function, instead of reading it from axr_options.ltx
 		
-	[hint]
+	[hint]  (as of MCM 1.6.0 this will actualy show _desc strings)
 	- Define: (string)
 	- Used by: option elements: ALL
 		Override default name / desc rule to replace the translation of an option with a custom one, should be set without "ui_mcm_" and "_desc"
@@ -304,7 +305,7 @@ This is a copy of the Instructions located at the end of the sctipt.
 ]]--
 
 ---------------------------------------------------------------------------------------
--- Tutorial: Using : dph-hcl's script for save game specific MCM options
+-- Tutorial: Using dph-hcl's script for save game specific MCM options
 ---------------------------------------------------------------------------------------
 
 --[[
@@ -331,6 +332,77 @@ This is a copy of the Instructions located at the end of the sctipt.
 			(calling ui_mcm.get(path) in on_mcm_load() is a bad idea don't do that )
 ]]--
 
+
+
+---------------------------------------------------------------------------------------
+-- Tutorial: Additional information on key_bind
+---------------------------------------------------------------------------------------
+
+--[[
+	Key binds are gathered into two meta lists for the users convienance. This means it is very important that your translation strings
+		clearly identify what the key does and ideally it should be clear what addon the keybiind is from.
+	
+	The value stored by the key bind is the DIK_keys value of the key. Same number that will be given to the key related callbacks.
+
+	val must be set to 2 and is still manditory.
+	
+	curr and functor  are not curently supported. Post an issue on github describing the usecase you had for them, if it's cool enough they might get fixed.
+
+	Old (pre 1.6.0) versions of MCM will not display key_bind and calling ui_mcm.get for it will return nil, take that into acount if you want reverse compatablity. 
+	
+]]--
+
+
+---------------------------------------------------------------------------------------
+-- Tutorial: Additional Key Bind utilities
+---------------------------------------------------------------------------------------
+
+--[[
+	MCM tracks the held status of the control and shift keys as well as a flag that is true when neither is pressed
+		ui_mcm.MOD_NONE  ui_mcm.MOD_SHIFT and ui_mcm.MOD_CTRL
+		ui_mcm.get_mod_key(val) will return the above flags based on val: 0:MOD_NONE 1:MOD_SHIFT and 2:MOD_CTRL
+		If these somehow get latched they reset when Escape is pressed. Please report cases of latching.
+	
+	MCM provides functions for detecting key double taps and keys that are held down, and single key presses that do not go on to be double or long presses.
+		ui_mcm.double_tap(id, key, [multi_tap]) should be called from on_key_press callback after you have filtered for your key
+			id: 	should be a unique identifier for your event, scriptname and a number work well:"ui_mcm01"
+			key: 	is of course they key passed into the on_key_press callback.
+			multi_tap: if true timer is updated instead of cleared allowing for the detection of triple/quad/ect taps
+			returns: true for a given id and key if less than X ms has elapsed since the last time it was called with that id and key (X is a user configurable value between 100ms and 1000 ms
+					 returns false otherwise. 
+					 If multi_tap is false timer is reset when true is returned preventing the function from returning true twice in a row
+					 If multi_tap is true the function will return true any time the gap between a call and the one before is within the window.
+			
+		ui_mcm.key_hold(id, key, [repeat]) should be called from on_key_hold callback after you have filtered for your key
+			id: 	should be a unique identifer for your event, scriptname and a number work well:"ui_mcm01"
+			key: 	is the key passed into the on_key_hold callback.
+			repeat: Optional. time in seconds. If the key continues to be held down will return true again after this many seconds on a cycle.
+			
+			when called from the on_key_hold callback it will return true after the key has been held down for Y ms (determined by applying a user defined multiplier to X above) and then again every repeat seconds if repeat is provided. sequence resets when key is released.
+
+		ui_mcm.simple_press(id, key, functor) should be called from on_key_press callback after you have filtered for your key
+			id: 	should be a unique identifier for your event, scrip name and a number work well:"ui_mcm01"
+			key: 	is the key passed into the on_key_press callback.
+			function: table {function, parameters}, to be executed when it is determined that the press is not long or double (or multi press in general)
+			
+			Unlike the other two this does not return any thing but instead you give it a function to execute. Using this function you gain exclusivity, your event won't fire when the key is double(multi) taped or held (long press), at the cost of a small bit of input delay. This delay is dependent on the double tap window the used defines in the MCM Key Bind settings.
+
+	The following option entries have translation stings provided by MCM and are setup to be ignored by pre 1.6.0 versions of MCM
+		Note the keybind conflict identification in MCM does NOT look for these and reports conflict on the keybind value alone.
+		
+		With shift and control, radio buton style
+	        {id = "modifier", type = ui_mcm.kb_mod_radio, val = 2, def = 0, hint = "mcm_kb_modifier" , content= { {0,"mcm_kb_mod_none"} , {1,"mcm_kb_mod_shift"} , {2,"mcm_kb_mod_ctrl"},{3,"mcm_kb_mod_alt"}}},
+		With shift and control, list style
+	        {id = "modifier", type = ui_mcm.kb_mod_list, val = 2, def = 0, hint = "mcm_kb_modifier" , content= { {0,"mcm_kb_mod_none"} , {1,"mcm_kb_mod_shift"} , {2,"mcm_kb_mod_ctrl"},{3,"mcm_kb_mod_alt"}}},
+		
+		
+		Single double or long press,  , radio buton style
+            {id = "mode", type = ui_mcm.kb_mod_radio, val = 2, def = 0, hint = "mcm_kb_mode" , content= { {0,"mcm_kb_mode_press"} , {1,"mcm_kb_mode_dtap"} , {2,"mcm_kb_mode_hold"}}},
+		Single double or long press,  , radio buton style
+            {id = "mode", type = ui_mcm.kb_mod_list, val = 2, def = 0, hint = "mcm_kb_mode" , content= { {0,"mcm_kb_mode_press"} , {1,"mcm_kb_mode_dtap"} , {2,"mcm_kb_mode_hold"}}},
+
+	An example script making use of all of these can be found at: https://github.com/RAX-Anomaly/MiniMapToggle/blob/main/gamedata/scripts/mini_map_toggle_mcm.script
+]]--
 
 ------------------------------------------------------------
 -- Tutorial: Examples:
@@ -411,3 +483,4 @@ This is a copy of the Instructions located at the end of the sctipt.
 		return op, "collection_example"
 	end
 ]]--
+
