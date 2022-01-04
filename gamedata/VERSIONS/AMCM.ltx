@@ -1,0 +1,14 @@
+[info]
+name = AMCM ; be unique, should match ltx name but not required
+version = 1.6.0 ; version numbers must follow https://semver.org/ (lua limitations results in a slightly less strict implementation)
+;test your version numbers. badly formatted version numbers will crash with message
+rev_compat_major = false ; if false the major version, (first number) comparison will be equalsto(==) if true greaterthan or equals to (=>) only set to true if you know addons looking for 1.x.x of your addon will work with 2.x.x  
+;about is a , seperated list of up to 3 strings that will be translated then printed one per line when MCM Versions prints a message about your addon/mod/script primary downlaod URL would be good to include.
+about = https://github.com/RAX-Anomaly/Anomaly-Mod-Configuration-Menu
+
+[hard_dependencies]
+;minimum allowed version, MCM will block playing if this version is not met
+[soft_dependencies]
+;prefered versions, for addons that support optional features or if you have an optional feature dependant on a newer version than your hard requiernemnt you can list both.
+;MCM will provide a message about the listed addon being out of date if this is not met.
+;also useful for informing ppl updated version of your other addons.

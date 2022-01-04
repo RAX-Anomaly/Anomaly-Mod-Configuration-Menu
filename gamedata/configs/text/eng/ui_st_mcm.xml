@@ -1,5 +1,5 @@
 <!-- 
-	Anomaly Modconfiguration Menu strings
+	Anomaly Mod Configuration Menu strings
 	
 -->
 
@@ -7,7 +7,7 @@
 
 	<string id="ui_mcm_desc_mcm">
 		<text>Welcome to Anomaly Mod Configuration Menu. By itself MCM does nothing. MCM provides a place for other mods/addons to display a settings UI.
-		To the left you will see a list of mods/addons that are using MCM to do so.</text>
+		\nTo the left you will see a list of mods/addons that are using MCM to do so.</text>
 	</string>
 	<string id="ui_mcm_desc_mcm2">
 		<text>Bugs with MCM or crashes with ui_mcm.script in the log are most likely caused by one of the mods/addons using MCM and should be reported to that mod/addon's author. </text>
@@ -19,12 +19,169 @@
 	<string id="ui_mcm_menu_mcm">
 		<text>MCM</text>
 	</string>
-	<string id="ui_mcm_mcm_reset">
+	<string id="ui_mcm_menu_mcm_about">
+		<text>About</text>
+	</string>
+	<string id="ui_mcm_mcm_mcm_about_reset">
 		<text>Reload all menus</text>
 	</string>
-	<string id="ui_mcm_mcm_reset_desc">
+	<string id="ui_mcm_mcm_mcm_about_reset_desc">
 		<text>Checking this and hitting apply will cause MCM to reload all menus. This is a debugging tool and shouldn't be necessary in the normal course of things.</text>
 	</string>
 
 
+	<string id="ui_mcm_menu_mcm_log">
+		<text>Logging</text>
+	</string>
+	<string id="ui_mcm_mcm_desc_log">
+		<text>This is a utility for addon makers that lets them move their logging out of the xray log and game console.
+		\nBecause I respect your concerns about lag and SSD write cycles I have provided some controls for you to tweak how the logging behaves.
+		\nLogs will be named after the script that creates them and the MCM session id number. They be created in appdata/logs/mcm/</text>
+	</string>
+
+	<string id="ui_mcm_mcm_mcm_log_enable">
+		<text>Enable MCM logging utility.</text>
+	</string>
+	<string id="ui_mcm_mcm_mcm_log_enable_desc">
+		<text>Unchecking this will prevent any new logs from being created or updated. (Note changes may not take effect until after a new save game is loaded.)</text>
+	</string>
+	<string id="ui_mcm_mcm_mcm_log_numlogs">
+		<text>Number of log sessions to keep.</text>
+	</string>
+	<string id="ui_mcm_mcm_mcm_log_numlogs_desc">
+		<text>When the number of logs created by a script exceeds this number older logs will be deleted. (Note log deletion will not happen if the game crashes.)</text>
+	</string>
+	<string id="ui_mcm_mcm_mcm_log_continuous">
+		<text>Allow continuous file writes.</text>
+	</string>
+	<string id="ui_mcm_mcm_mcm_log_continuous_desc">
+		<text>Logs files are normally updated in batches. This can cause some information to be lost if the game crashes. An addon maker may request you check this box to allow their log to be updated immediately.</text>
+	</string>
+	<string id="ui_mcm_mcm_mcm_log_savefreq">
+		<text>Time between Log auto saves in milliseconds.</text>
+	</string>
+	<string id="ui_mcm_mcm_mcm_log_savefreq_desc">
+		<text>No matter what is set here logs will still be saved when entering assorted UI screens and saving/loading games.</text>
+	</string>
+	<string id="ui_mcm_mcm_mcm_log_timestamp">
+		<text>Xray log time stamp frequency.</text>
+	</string>
+	<string id="ui_mcm_mcm_mcm_log_timestamp_desc">
+		<text>MCM adds a time stamp to the xray log to make it easier to coordinate events between mcm logs and the xray log. This is the minimum time between those time stamps. If nothing else is printing to the console neither will mcm.</text>
+	</string>
+	<string id="ui_mcm_mcm_mcm_log_debug_logging">
+		<text>Enable Debug logging.</text>
+	</string>
+	<string id="ui_mcm_mcm_mcm_log_debug_logging_desc">
+		<text>This enables MCM's own debug logging and should be enabled before reporting bugs with MCM. Other addons may also use this setting to enable thier own logging.</text>
+	</string>
+
+
+	<string id="ui_mcm_menu_mcm_kb">
+		<text>MCM Key Binds.</text>
+	</string>
+	<string id="ui_mcm_menu_mcm_kb_main">
+		<text>Main.</text>
+	</string>
+
+	<string id="ui_mcm_mcm_desc_kb">
+		<text>MCM Key Binds work "Minecraft Style": click on the box, then hit a key. Clicking or Escape Key will cancel.
+		\nIf the key you see does not match the key you pressed, or MCM seems to ignore some keys, you likely need to modify mcm_key_localization.ltx to reflect your keyboard layout.
+		\nKeys that are assigned to more than one MCM Key Bind or to an engine key bind will be highlighted red</text>
+	</string>
+	<string id="ui_mcm_mcm_desc_kb2">
+		<text>A few notes on the red conflicting key coloring.
+		\n1. It may not matter. If the keys are used in two different UI's or if one key bind only triggers when also holding shift then the fact that the key is used twice doesn't matter.
+		\n2. MCM does not know what an addon may be doing with a key. YOU need to understand how an addon is using a key to know if a conflict is relevant.
+		\n3. For a single pending change the color updates correctly, for multiple pending changes it may not. Apply your changes and reopen MCM to verify correct conflict status.</text>
+	</string>
+
+	<string id="ui_mcm_mcm_mcm_kb_mcm_kb_main_presstime">
+		<text>Long press multiplier.</text>
+	</string>
+	<string id="ui_mcm_mcm_mcm_kb_mcm_kb_main_presstime_desc">
+		<text>Multiplier applied to Double tap window to determine How long a key needs to be held down to count as a long press or hold. Only applies to addons that use MCM to identify long key presses.</text>
+	</string>
+	<string id="ui_mcm_mcm_mcm_kb_mcm_kb_main_dtaptime">
+		<text>Double tap window.</text>
+	</string>
+	<string id="ui_mcm_mcm_mcm_kb_mcm_kb_main_dtaptime_desc">
+		<text>How soon a second press of a key needs to follow a first to count as a double tap of the key. Only applies to addons that use MCM to identify double key presses. This time can affect the input delay of some single key press events and should thereby be set as small as possible.</text>
+	</string>
+
+	<string id="ui_mcm_menu_mcm_all_kb">
+		<text>All keybinds.</text>
+	</string>
+	<string id="ui_mcm_mcm_desc_kb_all">
+		<text>This panel gathers all MCM key binds into one place, in the same order that the addons that add them appear on the left.
+		\nHowever this list cannot include additional settings from the addons panel that may affect how this key behaves.
+		\nAlways review the addon panel where they Key Bind was gathered from as well as that addons documentation. </text>
+	</string>
+	<string id="ui_mcm_mcm_desc_kb_all2">
+		<text>Pending changes on other panels will not be reflected on this panel, nor will pending settings on this panel be reflected on others.
+		\nApply your changes before and after using this panel. Failure to do so may result in undesired behavior.
+		\n\nA few notes on the red conflicting key coloring.
+		\n1. It may not matter. If the keys are used in two different UI's or if one key bind only triggers when also holding shift then the fact that the key is used twice doesn't matter.
+		\n2. MCM does not know what an addon may be doing with a key. YOU need to understand how an addon is using a key to know if a conflict is relevant.
+		\n3. For a single pending change the color updates correctly, for multiple pending changes it may not. Apply your changes and reopen MCM to verify correct conflict status.</text>
+	</string>
+	<string id="ui_mcm_menu_mcm_kb_conflicts">
+		<text>Key Bind Conflicts.</text>
+	</string>
+	<string id="ui_mcm_mcm_desc_kb_conflicts">
+		<text>This panel gathers all MCM key binds marked as conflicting into one place, sorted by key.
+		\nIf a key only appears on this list once it likely conflicts with an engine keybind. Those are listed in the normal Anomaly options.
+		\nHowever this list cannot include additional settings from the addons panel that may affect how this key behaves.
+		\nAlways review the addon panel where they Key Bind was gathered from as well as that addons documentation. </text>
+	</string>
+
+	
+	
+	<string id="ui_mcm_mcm_kb_modifier">
+		<text>With modifier key.</text>
+	</string>
+	<string id="ui_mcm_mcm_kb_modifier_desc">
+		<text>The above keybind will only activate if this key is also held down.</text>
+	</string>
+
+	<string id="ui_mcm_lst_mcm_kb_mod_none">
+		<text>No modifier.</text>
+	</string>
+	<string id="ui_mcm_lst_mcm_kb_mod_ctrl">
+		<text>Control key.</text>
+	</string>
+	<string id="ui_mcm_lst_mcm_kb_mod_shift">
+		<text>Shift key.</text>
+	</string>
+	<string id="ui_mcm_lst_mcm_kb_mod_alt">
+		<text>Alt key.</text>
+	</string>
+
+
+
+	
+	<string id="ui_mcm_mcm_kb_mode">
+		<text>Input mode.</text>
+	</string>
+	<string id="ui_mcm_mcm_kb_mode_desc">
+		<text>The above keybind will activate if the key input in this manner.</text>
+	</string>
+	
+	<string id="ui_mcm_lst_mcm_kb_mode_press">
+		<text>Simple Press.</text>
+	</string>
+	<string id="ui_mcm_lst_mcm_kb_mode_dtap">
+		<text>Double tap.</text>
+	</string>
+	<string id="ui_mcm_lst_mcm_kb_mode_hold">
+		<text>Long Press.</text>
+	</string>
+	
+
+
+
+
+
 </string_table>
+
+
