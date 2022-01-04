@@ -1,0 +1,222 @@
+--[[
+MCM Logging Utility
+17DEC2021
+This work is licensed under a Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License
+Author: RavenAscendant
+--]]
+
+--[[
+Usage:
+	log = mcm_log.new("prefix")
+Log files are created at appdata/logs/mcm and are named after the script that created them.
+Because of this multiple log objects created in one script function more like channels with thier output to the shared file identified by the provided prefix.
+Each log object must be individualy enabled. This allows for easy control of diferent levels of logging
+	err = mcm_log.new("ERR")
+	err.enabled = true
+	msg = mcm_log.new("MSG")
+	msg.enabled = true
+A log object can be flagged to save the log file every line. (continuous logginf must also be enabled by the user in the MCM settings)
+	err.continuous = true
+Three functions are provided
+log(fmt) this function takes the same input as the anomaly printf it will write that text to a line in the log file
+that line will be prefaced with the log objects pfrefix and the time_continual time stamp. 
+	msg:log("hello %s", "world")
+Oputput: MSG	|22877||	hello world
+
+printf(fmt) behaves just like log except that it will print to the xray log and console as well. (printing to the console will still work even if user disables MCM logging. Printing to the console will not happen if the log object is not enabled)
+	msg:printf(fmt)
+	
+lastly log_table(tbl, name) formats and prints a table to the log
+
+
+--]]
+
+
+
+local mcm_path = "mcm/mcm_log/"
+local NUMLOGS = axr_main.config:r_value("mcm", mcm_path.."numlogs", 2, 2)
+local LOG_SAVE_FREQUENCY = axr_main.config:r_value("mcm", mcm_path.."savefreq", 2, 1000)
+local CONTINUOUS_ENABLED = axr_main.config:r_value("mcm", mcm_path.."continuous", 1, false)
+local TIMESTAMP_FREQ = axr_main.config:r_value("mcm", mcm_path.."timestamp", 2, 1000)
+local logging_enabled = axr_main.config:r_value("mcm", mcm_path.."enable", 1, true)
+
+
+local config = ini_file_ex("mcm_log.ltx",true)
+local string_gsub   = string.gsub
+local files = {}
+local PATH = getFS():update_path("$logs$","mcm")
+local last_console = 0
+local flush_time = 0
+
+local function write_log(file, tc, prefix, fmt, continuous)
+	if not (logging_enabled and file) then 	return end
+	local txt = prefix.."\t|"..tc.."||" .. fmt.."\n"
+	file:write(txt)
+	if continuous and CONTINUOUS_ENABLED then
+		file:flush()
+	end
+end
+
+
+class "MCM_Log"
+function MCM_Log:__init(prefix)
+	self.prefix = prefix or ""
+	self.enabled = false
+	self.continuous = false
+	local info = debug.getinfo(4,"S")
+	local path_list = str_explode(info.short_src, "\\")
+	local name = path_list and str_explode(path_list[#path_list], "%.")
+	self.fname = name and name[1] or "mcm_log_fail"
+end
+
+function MCM_Log:Open_file()
+	if (not files[self.fname]) and logging_enabled then
+		files[self.fname] = assert(io.open(PATH.."/"..self.fname.."_"..ui_mcm.get_session_id()..".log","a+")) 
+		files[self.fname]:write("======================\n")
+		files[self.fname]:write("=="..os.date("%d%b%Y %X") .."==\n")
+		files[self.fname]:write("=Continuous logging:=\n")
+		if not CONTINUOUS_ENABLED then
+			files[self.fname]:write("=========FALSE========\n")
+		else
+			files[self.fname]:write("=========TRUE=========\n")
+		end
+		files[self.fname]:write("======================\n")
+		files[self.fname]:flush()
+	end
+end
+
+
+
+function MCM_Log:log(fmt, ...)
+	if not (self.enabled and logging_enabled )then return false end
+	if not (fmt) then return end
+	local fmt = tostring(fmt)
+	self:Open_file()
+	if (select('#',...) >= 1) then
+		local i = 0
+		local p = {...}
+		local function sr(a)
+			i = i + 1
+			if (type(p[i]) == 'userdata') then
+				if (p[i].x and p[i].y) then
+					return vec_to_str(p[i])
+				end
+				return 'userdata'
+			end
+			return tostring(p[i])
+		end
+		fmt = string_gsub(fmt,"%%s",sr)
+	end
+
+	local tc = time_continual()
+	write_log(files[self.fname], tc , self.prefix, fmt, self.continuous)
+	return tc
+
+end
+
+function MCM_Log:printf(fmt, ...)
+	if self.enabled then
+		local tc = self:log(fmt, ...) or time_continual()
+		last_console = tc
+		printf("%s|%s|%s||"..tostring(fmt), self.prefix, self.fname,  tc, ...)
+		return tc
+	end
+end
+
+function MCM_Log:log_table(tbl, name)
+	if not (self.enabled and logging_enabled )then return false end
+	if type(tbl) ~= "table" then return end
+	name = name or tostring(tbl)
+	local txt = utils_data.print_table(tbl, false, true)
+	return self:log("TABLE:%s \n%s", name, txt)
+end
+
+
+
+
+function new(prefix)
+	local temp = MCM_Log(prefix)
+	return temp
+end
+
+
+local function flush_logs()
+	flush_time = time_continual()
+	for _,file in pairs(files) do
+		file:flush()
+	end
+end
+
+function fsgame_append(str,ap)
+	path = getFS():update_path("$fs_root$","fsgame.ltx")
+	local fsg = io.open(path,"a+")
+	local data = fsg:read("*all")
+	if not (string.find(data,str)) then
+		fsg:write("\n"..ap)
+		fsg:close()
+		return false
+	end
+	fsg:close()
+	return true
+end
+
+
+
+
+function close_logs()
+	fsgameupdated = fsgame_append("mcmlogs", "$mcmlogs$                  = true 	| false	| $logs$| mcm\\")
+	--printf("MCM_Log close fsgameupdated:%s",fsgameupdated)
+	if not fsgameupdated then return end
+	for fname,file in pairs(files) do
+		file:close()
+		local f	= getFS()
+		local flist = f:file_list_open_ex("$mcmlogs$",bit_or(FS.FS_ListFiles,FS.FS_RootOnly),fname.."*")
+		local f_cnt = flist:Size()
+		flist:Sort(5)
+		for	it=2, f_cnt-1 do
+			local file = flist:GetAt(it)
+			f:file_delete(f:update_path("$mcmlogs$",file:NameFull()))
+		end
+	end
+
+end
+
+function timed_flush()
+	if time_continual() - flush_time > LOG_SAVE_FREQUENCY then
+		flush_logs()
+	end
+end
+
+local pf  = _G.printf
+function _G.printf(...)
+	if (time_continual() - last_console > TIMESTAMP_FREQ) and logging_enabled then
+		last_console = time_continual()
+		pf("Time continual is:%s",last_console)
+	end
+	pf(...)
+end
+
+local function on_option_change(mcm)
+	if mcm then
+	 NUMLOGS = axr_main.config:r_value("mcm", mcm_path.."numlogs", 2, 2)
+	 LOG_SAVE_FREQUENCY = axr_main.config:r_value("mcm", mcm_path.."savefreq", 2, 2)
+	 CONTINUOUS_ENABLED = axr_main.config:r_value("mcm", mcm_path.."continuous", 1, false)
+	 TIMESTAMP_FREQ = axr_main.config:r_value("mcm", mcm_path.."timestamp", 2, 2)
+	 logging_enabled = axr_main.config:r_value("mcm", mcm_path.."enable", 1, true)
+	
+	end
+end
+
+function on_game_start()
+	flush_logs()
+    RegisterScriptCallback("on_before_level_changing",flush_logs)
+    RegisterScriptCallback("actor_on_before_death",flush_logs)
+    RegisterScriptCallback("GUI_on_show",flush_logs)
+    RegisterScriptCallback("GUI_on_hide",flush_logs)
+    RegisterScriptCallback("save_state",flush_logs)
+    RegisterScriptCallback("main_menu_on_init",flush_logs)
+    RegisterScriptCallback("main_menu_on_quit",flush_logs)
+    RegisterScriptCallback("main_menu_on_quit",on_option_change)
+	AddUniqueCall(timed_flush)
+end
+		

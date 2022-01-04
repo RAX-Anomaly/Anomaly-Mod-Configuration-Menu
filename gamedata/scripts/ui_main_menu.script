@@ -250,6 +250,7 @@ end
 
 function main_menu:OnMessageQuitWin()
 	exec_console_cmd("quit")
+	mcm_log.close_logs()
 end
 
 

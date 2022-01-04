@@ -3,17 +3,36 @@
 	RavenAcsendant
 	25MAY2021
 	Anommaly Mod Configuration Menu (Anomaly MCM)
-		1_1 added options table passed by referance
-		1_2 Fixed a crash that is actualy still part of ui_options
-		1_3 Added overide controls for option tree/branch text see the tutorial section "Parameters of option Tree" at the end of this sctipt
-		1_4 Integrated dph-hcl's script for save game specific MCM options. See "Tutorial: Using : dph-hcl's script for save game specific MCM options"
-	
+				
+				
 	+Modified version of the Anomaly Options menu created by Tronex. It retains all the same features.
 	+Dedicated space for mod options (As of 1_4 this includes easy save game specific options storage)
 	+Dynamicly loads options  from mod scripts at main menu load
 		simplifying the process and alowing it to be done before a save is loaded
 		without needing to edit a game script. There by reducing conflicts.
-		
+	
+	+Change History:
+		1_1 added options table passed by referance
+		1_2 Fixed a crash that is actualy still part of ui_options
+		1_3 Added overide controls for option tree/branch text see the tutorial section "Parameters of option Tree" at the end of this sctipt
+		1_4 Integrated dph-hcl's script for save game specific MCM options. See "Tutorial: Using : dph-hcl's script for save game specific MCM options"
+		1_5 Pass value to functors
+		1.6.0 	Adopted https://semver.org/spec/v1.0.0.html versioning spec for reasons.
+				Far left list sorted alphabeticaly, except MCM will always be at the top to serve as a landing page.
+				Added logging utility see instruction in mcm_log.script
+				Now pass true to on_options_change callback to make it posible to identify when it is coming from mcm
+				MCM tracks a session ID that only increments when game exe is launched. ui_mcm.get_session_id()
+				Added assert to identify missing val fields as that tends to result in hard to diagnose errors.
+				Added assert to block calling get() while mcm is building the options tree.
+				Added keybind widget
+					includes a simple conflict list and all keybinds list under mcm's tree.
+				Added utility functions to support key binds.
+					Tracking of held status of shift controls and alt keys with single functon to read all three and a no modifier state
+					Functions to help identify single, double and long presses of a key.
+					Provided templated mcm option tables for selecting modifier keys and single/double and long presses that include translation strings.
+				Updated documentation at end of this sctipt for all keybind related features.
+				
+
 	
 	
 	Tronex
@@ -37,12 +56,15 @@
 	
 --]]
 
-local enable_debug = false
+VERSION = "1.6.0-beta1"
+MCM_DEBUG = axr_main.config:r_value("mcm", "mcm/mcm_log/debug_logging", 1, false)
+local enable_debug_prints = false
 ------------------------------------------------------------
 -- Strings and LTX management
 ------------------------------------------------------------
 local ini_pres	   = ini_file("presets\\includes.ltx")
-local ini_loc 	   = ini_file_ex("localization.ltx",true)
+local ini_loc 	   = ini_file_ex("localization.ltx")
+local ini_mcm_key  = ini_file_ex("mcm_key_localization.ltx")
 local _opt_        = "/"                 -- For axr_options.ltx, don't touch!
 local opt_section  = "mcm"           -- For axr_options.ltx, don't touch!
 local opt_str      = "ui_mcm_"			 -- Option name: "ui_mcm_(option ID)" -- Option description: "ui_mcm_(option ID)_desc"
@@ -55,6 +77,7 @@ function cc(path,opt) return (path .. _opt_ .. opt) end
 -- Utilities
 ------------------------------------------------------------
 
+local session_id = nil
 local m_floor, m_ceil, s_find, s_gsub 	    =	 math.floor, math.ceil, string.find, string.gsub
 local clr, clamp, round_idp, str_explode 	=	 utils_xml.get_color, clamp, round_idp, str_explode
 local precision                             = 6 -- allowed number of zeros
@@ -63,14 +86,19 @@ local clr_o                                 = GetARGB(255, 250, 150, 75)
 local clr_g1                                = GetARGB(255, 170, 170, 170)
 local clr_g2                                = GetARGB(255, 200, 200, 200)
 local clr_w                                 = GetARGB(255, 255, 255, 255)
+local clr_r 								= GetARGB(255, 225, 0, 0)
 local clr_tree = {
 	[1] = GetARGB(255, 180, 180, 180),
 	[2] = GetARGB(255, 180, 180, 180),
 	[3] = GetARGB(255, 180, 180, 180),
 }
 
+local dbg = mcm_log.new("DBG")
+dbg.enabled = MCM_DEBUG
+dbg.continuous = true
 function print_dbg(...)
-	if enable_debug then
+	dbg:log(...)
+	if enable_debug_prints then
 		printf(...)
 	end
 end
@@ -91,31 +119,87 @@ local allowed_type = { -- ignore tables from these types in temp tables
 	["input"] = true,  
 	["radio_h"] = true,  
 	["radio_v"] = true,  
-	["track"] = true,  
-}
-function init_opt_base()
+	["track"] = true,
+	["key_bind"] = true,
 
-options = {
-
-{ id= "mcm"        , sh=true    ,gr={
 	
-		{ id= "slide_mcm"		 	   ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_menu_mcm"		,size= {512,50}		},
-		{ id= "desc_mcm"    	 	,type= "desc"     ,text= "ui_mcm_desc_mcm"			 ,clr= {255,125,175,200}	},
-		{ id= "desc_mcm2"    	 	,type= "desc"     ,text= "ui_mcm_desc_mcm2"			 ,clr= {255,125,175,200}	},
-		{ id="reset"	              ,type= "check"    ,val= 1	,def= false 	    , functor = {reload }                                                 	                },
-			
-},
-}}
+}
+local key_by_path = {}
+local paths_by_key = {}
+local gathering = false
+function init_opt_base()
+	print_dbg("MCM options reset.")
+	get_session_id()
+	options = {
+		{ 	id= "mcm"        , gr={
+				{id = "mcm_about", sh=true    , gr={
+					{ id= "slide_mcm"		 	   ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_menu_mcm_about"		,size= {512,50}		},
+					{ id= "desc_mcm"    	 	,type= "desc"     ,text= "ui_mcm_desc_mcm"			 ,clr= {255,125,175,200}	},
+					{ id= "desc_mcm2"    	 	,type= "desc"     ,text= "ui_mcm_desc_mcm2"			 ,clr= {255,125,175,200}	},
+					--{ id="reset"	              ,type= "check"    ,val= 1	,def= false 	    , functor = {reload }  },
+				},},
+				{id = "mcm_kb",  gr={
+					{id = "mcm_kb_main",  sh=true    ,gr={
+						{ id= "slide_kb"		 	   ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_menu_mcm_kb"		,size= {512,50}		},
+						{ id= "desc_kb"    	 	,type= "desc"     ,text= "ui_mcm_mcm_desc_kb"			 ,clr= {255,125,175,200}	},
+						{ id= "desc_kb2"    	 	,type= "desc"     ,text= "ui_mcm_mcm_desc_kb2"			 ,clr= {255,125,175,200}	},
+						{id = "dtaptime", type = "track", val = 2, def = 500, min = 100, max = 750, step = 1},
+						{id = "presstime", type = "track", val = 2, def = 1.5, min = 1.2, max = 2, step = 0.01, prec = 2},
 
-gather_options()
+					},},
+					{id = "mcm_all_kb", sh=true    , gr={
+						{ id= "slide_kb"		 	   ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_menu_mcm_kb_all"		,size= {512,50}		},
+						{ id= "desc_kb"    	 	,type= "desc"     ,text= "ui_mcm_mcm_desc_kb_all"			 ,clr= {255,125,175,200}	},
+						{ id= "desc_kb2"    	 	,type= "desc"     ,text= "ui_mcm_mcm_desc_kb_all2"			 ,clr= {255,125,175,200}	},
+					},},
+					{id = "mcm_kb_conflicts", sh=true    , gr={
+						{ id= "slide_kb"		 	   ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_menu_mcm_kb_conflicts"		,size= {512,50}		},
+						{ id= "desc_kb"    	 	,type= "desc"     ,text= "ui_mcm_mcm_desc_kb_conflicts"			 ,clr= {255,125,175,200}	},
+						{ id= "desc_kb2"    	 	,type= "desc"     ,text= "ui_mcm_mcm_desc_kb_all2"			 ,clr= {255,125,175,200}	},
+					},},
+					
+					
+				},},
+				{id = "mcm_log", sh=true    , gr={
+					{ id= "slide_log"		 	   ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_menu_mcm_log"		,size= {512,50}		},
+					{ id= "desc_log"    	 	,type= "desc"     ,text= "ui_mcm_mcm_desc_log"			 ,clr= {255,125,175,200}	},
+					{id = "enable", type = "check", val = 1, def = true},
+					{id = "numlogs", type = "track", val = 2, def = 2, min = 1, max = 10, step = 1},
+					{id = "continuous", type = "check", val = 1, def = false},
+					{id = "savefreq", type = "input", val = 2, def = 1000, min = 100, max = 1000000000000000},
+					{id = "timestamp", type = "input", val = 2, def = 1000, min = 1, max = 1000000000000000},
+					{id = "debug_logging", type = "check", val = 1, def = true},
+				},},
+
+			},
+		}
+	}
+	local kb_meta = {all = {}, conflict = {}}
+	gathering = true
+	gather_options()
+	gathering = false	
+	table.sort(options, function(a,b)
+		if a.id == "mcm" then return true end
+		if b.id == "mcm" then return false end
+		return game.translate_string(a.text or opt_str_menu .. a.id) < game.translate_string(b.text or opt_str_menu .. b.id)
+	end)
+
+	init_opt_coder(kb_meta)
+
+	table.sort(kb_meta.conflict, function(a,b) return dispaly_key(get(a.kb_path)) < dispaly_key(get(b.kb_path)) end)
+	for i = 1, #kb_meta.all do
+		options[1].gr[2].gr[2].gr[3+i] = kb_meta.all[i]
+		options[1].gr[2].gr[3].gr[3+i] = kb_meta.conflict[i]
+	end
 
 
-init_opt_coder()	
+	init_opt_coder()
+	
 end
 
 
-function init_opt_coder()
-	
+function init_opt_coder(kb_meta)
+	local keybind_count = 0
 	------------------------------------------------------------------------
 	-- Coding options
 	local function code_option(gr, id, num)
@@ -124,8 +208,21 @@ function init_opt_coder()
 			if allowed_type[gr[i].type] then
 				path            = cc(id , gr[i].id)
 				opt_index[path] = cc(num , i)
-				opt_val[path]  = gr[i].val
+				opt_val[path]  = assert(gr[i].val, "val is manditory! option path:"..path)
 				--printf("-[%s] | index: %s - type: %s", path, opt_index[path], opt_val[path])
+				if gr[i].type == "key_bind" and kb_meta then
+					keybind_count = keybind_count + 1
+					update_conflict(path, get(path))
+					local temp = dup_table(gr[i])
+					temp.id = temp.id .. "_"..keybind_count
+					temp.kb_path = path
+					temp.curr = {get,path}
+					temp.hint = temp.hint or id.."_"..gr[i].id
+					temp.functor = {function(p,v) set(p,v) update_conflict(p,v) end, path  }
+					kb_meta.all[#kb_meta.all+1] = dup_table(temp)
+					temp.precondition = {get_conflict, path}
+					kb_meta.conflict[#kb_meta.conflict+1] = dup_table(temp)
+				end
 			end
 		end
 	end
@@ -163,18 +260,8 @@ end
 function gather_options()
 	-- this is modified from how axr_main loads all the other scripts thanks to Igi for the idea.
 	local ignore = { 
-		["_G.script"] = true,
-		["class_registrator.script"] = true,
-		["game_registrator.script"] = true,
-		["ui_registrator.script"] = true,
-		["ce_new_attachable_item.script"] = true,
-		["ce_new_game_dm.script"] = true,
-		["sim_faction_brain_human.script"] = true,
-		["sim_faction_brain_mutant.script"] = true,
-		["ce_switcher.script"] = true,
-		["axr_main.script"] = true,
-		["lua_help.script"] = true,
-		["rx_gl.script"] = true
+		["ui_mcm.script"] = true,
+
 	}
 	
 	local t = {}
@@ -225,10 +312,12 @@ end
 ------------------------------------------------------------
 
 -- Special
-function start_lighting_ui(self)
-	self:On_Cancel()
-	ui_ctrl_lighting.start()
+local function empty_functor()
+	print_dbg("Empty functor called!")
 end
+
+
+	
 
 function reload()
 	set("mcm/reset", false)
@@ -252,7 +341,175 @@ function for_renderer(...)
 	return result
 end
 
+--Key bind stuff
+local function set_conflict(ck)
+	local conflict = nil
+	for k, v in pairs(paths_by_key[ck]) do
+		if k ~= "conflict" then
+			conflict = conflict or conflict == false or false --if it is true it stays true, if false it becomes true if nil it becomes false. 0 entries = nil, 1 entry = false, more than 1 entry = true
+		end
+	end
+	paths_by_key[ck].conflict = conflict
+	print_dbg("set conflict ck:%s con:%s",ck,conflict)
+end
 
+function update_conflict(path, key)
+	key = tonumber(key)
+	local old_key = key_by_path[path]
+		print_dbg("path:%s, key:%s, old:%s", path, key, old_key)
+
+	if key == old_key then return end
+	key_by_path[path] = key
+	if old_key then
+		paths_by_key[old_key][path] = nil
+		if paths_by_key[old_key].conflict then -- if this key used to have a conflict see if it can be clered
+			set_conflict(old_key)
+		end
+	end
+	if not paths_by_key[key] then
+		paths_by_key[key] = {}
+	end
+	paths_by_key[key][path] = true
+	if not paths_by_key[key].conflict then --if this key didn't have a conflict see if it does now
+		set_conflict(key)
+	end
+	
+end
+
+function get_conflict(path, key)
+	local k = key or key_by_path[path]
+	print_dbg("path:%s, key:%s, k:%s", path, type(key), type(k))
+
+	assert(k, "No key found for path")
+	k = tonumber(k)
+	if  dik_to_bind(k) ~= dik_to_bind(1000) then --conflicts with engine keybind
+		print_dbg("bind:%s", dik_to_bind(k))
+		return true
+	end
+	
+	if key_by_path[path] == k then
+		print_dbg("==")
+		return paths_by_key[k] and paths_by_key[k].conflict
+	end
+	print_dbg("=/= kbp:%s %s, k:%s %s",type(key_by_path[path]), key_by_path[path], k, type(k))
+	return paths_by_key[k] and (paths_by_key[k].conflict or paths_by_key[k].conflict == false) --limited support for pending changes conflicts.
+end
+
+function dispaly_key(key)
+	local loc = ini_loc:r_value("string_table","language")
+	loc = ini_mcm_key:section_exist(loc) and loc or "eng"
+	return ini_mcm_key:r_value(loc, key,0,"<!!!>")
+end
+
+kb_mod_radio = "radio_h"
+kb_mod_list = "list"
+
+local tap = {}
+function double_tap(id, key, multi_tap)
+	local tg = time_continual()	
+	tap[key] = tap[key] or {}
+	if not tap[key].id then --first press, set timer return false
+		tap[key].id = tg
+		return false
+	end
+	local dtaptime = get("mcm/mcm_kb/mcm_kb_main/dtaptime")
+	
+	if (tg - tap[key].id <= dtaptime) then --if inside the dtap window
+		tap[key].id = multi_tap and tg -- if multi_tap set timer for next tap, else clear it.
+		return true
+	end
+	
+	tap[key].id = tg -- if we get here we are past the window for a double tap so this is a first press
+	return false
+end
+
+
+local hold = {}
+function key_hold(id,key, cycle)
+	local dtaptime = get("mcm/mcm_kb/mcm_kb_main/dtaptime")
+	local hold_time = get("mcm/mcm_kb/mcm_kb_main/presstime") * dtaptime
+	cycle = cycle or 10000
+	local tg = time_continual()
+	hold[key] = hold[key] or {}
+	if (not hold[key].id) or (tg - hold[key].id > hold_time*1.5) then
+		hold[key].id = tg
+	elseif (tg - hold[key].id > hold_time ) then			
+		hold[key].id = tg + cycle * 1000
+		return true
+	end
+	return false
+end
+
+local function execute_if_not_held(id,key, functor,...)
+	if not (hold[key] and hold[key]["mcm_single_"..id]) then
+		exec(functor,...)
+	end
+	return true
+end
+
+function simple_press(id, key, functor,...)
+	
+	dtap = double_tap("mcm_single_"..id, key, true)
+	local tg = time_continual()
+	hold[key] = hold[key] or {}
+	hold[key]["mcm_single_"..id] = tg
+	local dtaptime = get("mcm/mcm_kb/mcm_kb_main/dtaptime")
+	if dtap then
+		RemoveTimeEvent("mcm_single_press",id.."_mcm_single_"..key)
+	else
+		CreateTimeEvent("mcm_single_press",id.."_mcm_single_"..key,(dtaptime*1.1)/1000,execute_if_not_held,id, key, functor,...)
+	end
+
+
+end
+
+
+
+
+MOD_NONE = true
+MOD_CTRL = false
+MOD_SHIFT = false
+MOD_ALT = false
+
+function get_mod_key(val)
+	if val == 1 then
+		return MOD_SHIFT
+	elseif val == 2 then
+		return MOD_CTRL
+	elseif val == 3 then
+		return MOD_ALT
+	end
+	return MOD_NONE
+end
+
+function on_key_release(key)
+	hold[key] = nil
+	if key == DIK_keys.DIK_RCONTROL or key == DIK_keys.DIK_LCONTROL then
+		MOD_CTRL = false
+	elseif key == DIK_keys.DIK_RSHIFT or key == DIK_keys.DIK_LSHIFT then
+		MOD_SHIFT = false
+	elseif key == DIK_keys.DIK_RMENU or key == DIK_keys.DIK_LMENU then
+		MOD_ALT = false
+	elseif key == DIK_keys.DIK_ESCAPE then
+		MOD_CTRL = false
+		MOD_SHIFT = false
+		MOD_ALT = false
+	end
+	MOD_NONE = not(MOD_CTRL or MOD_SHIFT or MOD_ALT)
+	
+end
+function on_key_press(key)
+	if key == DIK_keys.DIK_RCONTROL or key == DIK_keys.DIK_LCONTROL then
+		MOD_CTRL = true
+	elseif key == DIK_keys.DIK_RSHIFT or key == DIK_keys.DIK_LSHIFT then
+		MOD_SHIFT = true
+	elseif key == DIK_keys.DIK_RMENU or key == DIK_keys.DIK_LMENU then
+		MOD_ALT = true
+
+	end
+	MOD_NONE = not(MOD_CTRL or MOD_SHIFT or MOD_ALT)
+	
+end
 
 
 
@@ -296,9 +553,42 @@ function check_opt_table(id)
 	local t = str_opt_explode(id, true)
 	return #t > 0
 end
+function CTimeTo_mSec(ct)
+	local Y, M, D, h, m, s, ms = 0, 0, 0, 0, 0, 0, 0
+	Y, M, D, h, m, s, ms = ct:get(Y, M, D, h, m, s, ms)
+	return ((D*24*60*60 + h*60*60 + m*60 + s)*1000 + ms)
+end
 
+local function create_session_id()
+	if not  session_id then
+		session_id = axr_main.config:r_value(opt_section, "session_id", 2, 0)
+		
+		if not level.present() then -- if there is a level present then this is an inprogress session, use ID in file. if not compare the stored session start to the curent time and time continual to identify new session
+			local session_start = axr_main.config:r_value(opt_section, "session_start", 2, 0)
+			local now = os.time() * 1000
+			if (now - session_start) > (time_continual() + 10000) then --ten seconds of slop
+				session_id = session_id + 1
+				axr_main.config:w_value(opt_section, "session_id", session_id)
+				axr_main.config:w_value(opt_section, "session_start", now)
+				axr_main.config:save()
+				printf("MCM Session ID:%s", session_id) 
+			end
+		end
+	end
+end
+
+function get_session_id()
+	create_session_id()
+	return session_id
+end
+
+function is_gathering()
+	return gathering
+end
 --------------------
 function get(id)
+	assert(not gathering, "ui_mcm.get() cannot be called during script load or on_mcm_load()!")
+
 	if (#options == 0) then
 		init_opt_base()
 	end
@@ -366,6 +656,8 @@ function UIMCM:__init() super()
 	self._Input = {}
 	self._Track = {}
 	self._Radio = {}
+	self._Hint = {}
+
 
 	-- Prepare the options table
 	if (#options == 0) then
@@ -387,7 +679,7 @@ function UIMCM:InitControls()
 
 	self.xml = CScriptXmlInit()
 	local xml = self.xml
-	xml:ParseFile				("ui_options.xml")
+	xml:ParseFile				("ui_mcm.xml")
 	
 	self.background 			= xml:InitStatic("background", self)
 	self.dialog					= xml:InitStatic("main", self)
@@ -431,6 +723,11 @@ function UIMCM:InitControls()
 	
 	-- Hint Window
 	self.hint_wnd = utils_ui.UIHint(self)
+	
+	--MCM Key Bind
+	self.k_binder = nil
+	self.k_timer = 0
+	self.key_input = nil
 end
 
 function UIMCM:InitCallBacks()
@@ -451,7 +748,7 @@ function UIMCM:Update()
 	-- Show hint on hover
 	for id,ctrl in pairs(self._Cap) do
 		if ctrl:IsCursorOverWindow() then
-			local str = opt_str .. id .. "_desc" 
+			local str = opt_str .. (self._Hint[id] or id) .. "_desc"
 			local str_t = game.translate_string(str)
 			if (str ~= str_t) then
 				self.hint_wnd:Update(str_t)
@@ -489,7 +786,10 @@ function UIMCM:Reset()
 			end
 		end
 	end
-	
+	self.k_binder = nil
+	self.k_timer = 0
+	self.key_input = nil
+
 	self:Register_Tree(1, "", options, 1)
 end
 
@@ -510,25 +810,10 @@ function UIMCM:Reset_opt(curr_tree, path, flags)
 	else
 		
 		
-		-- Keybinds
-		if (self.dlg_controls == nil) then
-			self.dlg_controls			= mcm_controls()
-			self.dlg_controls:InitControls(0,0, xml, self)
-			self.dlg_controls:Show		(false)
-			self.dialog:AttachChild		(self.dlg_controls)
-			xml:InitWindow				("tab_size", 0, self.dlg_controls)
-			
-			local opt = COptionsManager()
-			
-			opt:SetCurrentValues("key_binding")
-			opt:SaveBackupValues("key_binding")
-		end
-		if (path == "control/keybind") then
-			self.dlg_controls:Show(true)
-			self.Keybinds_Shown = true
-		else
-			self.dlg_controls:Show(false)
-		end
+		self.k_binder = nil
+		self.k_timer = 0
+		self.key_input = nil
+
 		
 		-- Presets
 		self:Register_Preset(curr_tree)
@@ -546,6 +831,7 @@ function UIMCM:Reset_opt(curr_tree, path, flags)
 		empty_table(self._Input)
 		empty_table(self._Track)
 		empty_table(self._Radio)
+		empty_table(self._Hint)
 		
 		for i=1,#curr_tree.gr do
 			-- Check preconditions
@@ -565,7 +851,6 @@ function UIMCM:Reset_opt(curr_tree, path, flags)
 				
 				local _st = xml:InitStatic("main:st", nil)
 				local _h = 0
-		
 ----------- Support
 				if (v.type == "line") then
 					_h = self:Register_Line(xml, _st)
@@ -603,6 +888,9 @@ function UIMCM:Reset_opt(curr_tree, path, flags)
 					
 				elseif (v.type == "radio_v") then
 					_h = self:Register_Radio(xml, _st, path, opt, v, false, flags)
+
+				elseif (v.type == "key_bind") then
+					_h = self:Register_Key_Bind(xml, _st, path, opt, v,  flags)
 					
 				end
 				
@@ -622,6 +910,9 @@ function UIMCM:Reset_last_opt()
 	Register_UI("UIMCM")
 	
 	if self.last_curr_tree and self.last_path then
+		if self.last_path == "mcm/mcm_kb/mcm_conflicts" then
+			self.last_curr_tree = options[1].gr[2].gr[3]
+		end
 		self:Reset_opt(self.last_curr_tree, self.last_path)
 		self:UpdatePending()
 	end
@@ -634,6 +925,7 @@ function UIMCM:Register_Cap(xml, handler, id, hint)
 	id = s_gsub(id, _opt_, "_")
 	self._Cap[id] = xml:InitStatic("elements:cap",handler)
 	self._Cap[id]:TextControl():SetText( game.translate_string(opt_str .. (hint or id)) )
+	self._Hint[id] = hint
 	return self._Cap[id]:GetHeight()
 end
 
@@ -747,6 +1039,85 @@ function UIMCM:Callback_Check(ctrl, path, opt, v)
 	self:CacheValue(path, opt, value, v)
 end
 
+function UIMCM:Register_Key_Bind(xml, handler, path, opt, v, flags)
+	local id = cc(path , opt)
+	
+	self.k_binder = nil
+	self.k_timer = 0
+	self.key_input = nil
+
+	
+	--[[ Apply to all button
+	if flags.apply_to_all and flags.group then
+		self:Register_BtnAll(xml, handler, path, opt, v, flags)
+	end
+	--]]
+	xml:InitFrame("elements:frame_key_button", handler)
+	local txt = xml:InitStatic("elements:txt_key_button", handler)
+	
+	-- Create control
+	local ctrl = xml:Init3tButton("elements:btn_key_button", handler)
+	local h = ctrl:GetHeight()
+	
+	-- Caption
+	local h = self:Register_Cap(xml, handler,  id, v.hint)
+
+	-- Get values
+	local value = self:GetValue(path, opt, v, flags)
+
+	txt:TextControl():SetText(dispaly_key(value))
+
+	if get_conflict(v.kb_path or id, value) then
+		txt:TextControl():SetTextColor(clr_r)
+	else
+		txt:TextControl():SetTextColor(clr_g1)
+	end
+	-- Register
+	local id_ctrl = self:Stacker(path, opt, v)
+
+	self:Register(ctrl, id_ctrl)
+	local _wrapper = function(handler) -- we need wrapper in order to pass ctrl to method
+		self:Callback_Key_Bind(ctrl, path, opt, v, txt)
+	end
+
+	self:AddCallback(id_ctrl, ui_events.BUTTON_CLICKED, _wrapper, self)
+	
+	return h
+end
+
+function UIMCM:Callback_Key_Bind(ctrl, path, opt, v, txt)
+	self.key_input = txt:TextControl()
+	self.key_input:SetText( "<?>")
+	txt:TextControl():SetTextColor(clr_w)
+	if self.k_binder then
+		self.k_binder() -- clear other bind inputs
+	end
+	self.k_timer = time_continual()
+	self.k_binder = function(key)
+		self:Key_Binder(ctrl, path, opt, v, key, txt)
+	end
+end
+
+function UIMCM:Key_Binder(ctrl, path, opt, v, key, txt)
+	
+	self.key_input = nil
+	self.k_binder = nil
+	local value
+	if key then
+		self:CacheValue(path, opt, key, v)
+		value = key
+	else
+		value = self:GetValue(path, opt, v, flags)
+	end
+	txt:TextControl():SetText(dispaly_key(value))
+	if get_conflict(v.kb_path or  cc(path , opt), value) then
+		txt:TextControl():SetTextColor(clr_r)
+	else
+		txt:TextControl():SetTextColor(clr_g1)
+	end
+
+end
+
 function UIMCM:Register_Button(xml, handler, path, opt, v, flags)
 	local id = cc(path , opt)
 	
@@ -783,6 +1154,9 @@ function UIMCM:Register_Button(xml, handler, path, opt, v, flags)
 	
 	return h
 end
+
+
+
 function UIMCM:Callback_Button(ctrl, path, opt, v)
 	if v.functor_ui then
 		local id = cc(path , opt)
@@ -1177,6 +1551,8 @@ end
 function UIMCM:Register_Tree(tr, path, group, idx)
 	print_dbg("-Register_Tree | tr: %s - path: %s", tr, path)
 	local xml = self.xml
+	self.key_input = nil
+	self.k_binder = nil
 	
 	if (not self.tree[tr]) then
 		self.tree[tr] = {}
@@ -1232,6 +1608,8 @@ function UIMCM:Register_Tree(tr, path, group, idx)
 end
 function UIMCM:Callback_Tree(tr, path, group, ctrl, i)
 	print_dbg("-Callback_Tree | tr: %s - path: %s - index: %s", tr, path, i)
+	self.key_input = nil
+	self.k_binder = nil
 	
 	-- Radio buttons behavior
 	if (ctrl[i]:GetCheck() == false) then
@@ -1274,12 +1652,12 @@ end
 ------------------------------------------------------------
 function UIMCM:GetValue(path, opt, v, flags)
 -- NOTE: make sure to check for nil values only, since false exists as legit value for commands and check boxes
-
 	local value
 	
 	if flags and flags.def then
+
 		value = self:GetDefaultValue(path, opt, v)
-		
+
 	elseif flags and flags.preset then
 		local pres = flags.preset
 		local id = cc(path , opt)
@@ -1309,7 +1687,7 @@ function UIMCM:GetValue(path, opt, v, flags)
 	if (value ~= nil) and (v.type == "track") then
 		value = clamp(value, v.min, v.max)
 	end
-	
+
 	return value
 end
 
@@ -1500,10 +1878,7 @@ function UIMCM:OnButton_Reset()
 		end
 	end
 	
-	if self.dlg_controls and self.dlg_controls:IsShown() then
-		local opt				= COptionsManager()
-		opt:SetCurrentValues	("key_binding")
-	end
+
 end
 
 function UIMCM:OnButton_Default()
@@ -1511,12 +1886,7 @@ function UIMCM:OnButton_Default()
 		self:Reset_opt(self.last_curr_tree, self.last_path, { def = true })
 	end
 	
-	if self.dlg_controls and self.dlg_controls:IsShown() then
-		exec_console_cmd("default_controls")
-	
-		local opt				= COptionsManager()
-		opt:SetCurrentValues	("key_binding")
-	end
+
 end
 
 function UIMCM:OnButton_Cancel()
@@ -1538,6 +1908,9 @@ function UIMCM:On_Accept()
 		if (not v.curr) then
 			print_dbg("- Saved [%s] := %s", id, val)
 			axr_main.config:w_value(opt_section, id, val)
+			if key_by_path[id] then
+				update_conflict(id, val)
+			end
 			self.Save_AXR = true
 		end
 		
@@ -1559,6 +1932,11 @@ function UIMCM:On_Accept()
 				v.functor[#v.functor] = nil
 			end
 		end
+		
+		if v.type == "key_bind" then
+			self.key_changed = true
+		end
+		
 		
 		-- See if it needs restart
 		if v.restart then
@@ -1585,21 +1963,15 @@ function UIMCM:On_Accept()
 		end
 	end
 	
+
+	
 	-- Save axr_options
 	if self.Save_AXR then
 		axr_main.config:save()
 		self.Save_AXR = false
 	end
 	
-	-- Save keybinds
-	if self.Keybinds_Shown then
-		local opt		= COptionsManager()
-		opt:SaveValues("key_binding")
-		opt:OptionsPostAccept()
-		self.Save_CFG = true
-	end
-	
-	print_dbg("~ Change done: %s | Game restart: %s | Vid restart: %s | Save AXR: %s | Save CFG: %s | Keybinds: %s", self.Change_Done, self.Need_Restart, self.Need_VidRestart, self.Save_AXR, self.Save_CFG, self.Keybinds_Shown)
+
 	
 	-- appdata
 	if self.Save_CFG then
@@ -1610,12 +1982,31 @@ function UIMCM:On_Accept()
 
 	if level.present() and self.Change_Done then
 		print_dbg("% Sent callback (on_option_change)")
-		SendScriptCallback("on_option_change")
+		SendScriptCallback("on_option_change", true)
 	end
 	
 	-- Clear cache
 	empty_table(opt_temp)
 	empty_table(opt_backup)
+	
+	if self.key_changed then --resort the conflict key list.
+		self.key_changed = false
+		table.sort(options[1].gr[2].gr[3].gr, function(a,b)
+			local t = {slide_kb = 1, desc_kb = 2, desc_kb2 = 3}
+			if t[a.id] and t[b.id] then
+				return t[a.id] < t[b.id]
+			end
+			if t[a.id] and not t[b.id] then
+				return true
+			end
+			if (not t[a.id]) and t[b.id] then
+				return false
+			end
+			return dispaly_key(get(a.kb_path)) < dispaly_key(get(b.kb_path))
+		end)
+		init_opt_coder()
+	end
+
 	
 	-- Exit
 	self:On_Cancel()
@@ -1645,7 +2036,7 @@ function UIMCM:On_Cancel()
 	self.Need_VidRestart = false
 	self.Need_Restart = false
 	self.Save_CFG = false
-	self.Keybinds_Shown = false
+
 	
 	Unregister_UI("UIMCM")
 end
@@ -1666,41 +2057,24 @@ function UIMCM:OnKeyboard(dik, keyboard_action)
 		if keyboard_action == ui_events.WINDOW_KEY_PRESSED then
 		
 			if dik == DIK_keys.DIK_ESCAPE then
-				self:OnButton_Cancel()
+				if self.k_binder then
+					self.k_binder()
+				else
+					self:OnButton_Cancel()
+				end
+			elseif self.k_binder and dispaly_key(dik) then
+				self.k_binder(dik)
 			end
-
 		end
 	end
-
+	if self.k_binder and ((time_continual() - self.k_timer)  > 500) then --clear k_binder on any other input after half a second.
+		self.k_binder()
+	end
 	return res
 end
 
 
-------------------------------------------------------------
--- Keybinds
-------------------------------------------------------------
-class "mcm_controls" (CUIWindow)
 
-function mcm_controls:__init() super()
-end
-
-function mcm_controls:__finalize()
-
-end
-
-function mcm_controls:InitControls(x, y, xml, handler)
-
-	self:SetWndPos(vector2():set(x,y))
-	self:SetWndSize(vector2():set(738,416))
-
-	self:SetAutoDelete(true)
-
---	self.bk = xml:InitFrame("frame", self)
-
-	xml:InitFrameLine	("tab_controls:cap_keyboardsetup",		self)
-	xml:InitFrameLine	("tab_controls:cap_keyboardsetup",		self)
-	xml:InitKeyBinding	("tab_controls:key_binding",			self)
-end
 
 function trader_cond(x)
 	if x == 'get' then
@@ -1720,7 +2094,10 @@ if dph_mcm_save_storage and dph_mcm_save_storage.register_module then
 	store_in_save = dph_mcm_save_storage.register_module
 end
 
-
+function on_game_start()
+    RegisterScriptCallback("on_key_release",on_key_release)
+    RegisterScriptCallback("on_key_press",on_key_press)
+end
 
 ------------------------------------------------------------
 -- Tutorial:Table of Contents:
@@ -1852,6 +2229,7 @@ end
 				"radio_h"   	: Option, radio box, select one out of many choices. Can fit up to 8 selections (Horizental layout)
 				"radio_v"   	: Option, radio box, select one out of many choices. Can fit up any number of selections (Vertical layout)
 				"track"       	: Option, track bar, easy way to control numric options with min/max values (can be used only if [val] = 2)
+				"key_bind"		: Option, button that registers a keypress after being clicked. (See suplimental instructions below)
 		- Support elements:
 				"line"         	: Support element, a simple line to separate things around
 				"image"    	   	: Support element, 563x50 px image box, full-area coverage
@@ -1966,7 +2344,7 @@ end
 	- Used by: option elements: ALL
 		get current value of an option by executing the declared function, instead of reading it from axr_options.ltx
 		
-	[hint]
+	[hint]  (as of MCM 1.6.0 this will actualy show _desc strings)
 	- Define: (string)
 	- Used by: option elements: ALL
 		Override default name / desc rule to replace the translation of an option with a custom one, should be set without "ui_mcm_" and "_desc"
@@ -2023,7 +2401,7 @@ end
 ]]--
 
 ---------------------------------------------------------------------------------------
--- Tutorial: Using : dph-hcl's script for save game specific MCM options
+-- Tutorial: Using dph-hcl's script for save game specific MCM options
 ---------------------------------------------------------------------------------------
 
 --[[
@@ -2050,6 +2428,77 @@ end
 			(calling ui_mcm.get(path) in on_mcm_load() is a bad idea don't do that )
 ]]--
 
+
+
+---------------------------------------------------------------------------------------
+-- Tutorial: Additional information on key_bind
+---------------------------------------------------------------------------------------
+
+--[[
+	Key binds are gathered into two meta lists for the users convienance. This means it is very important that your translation strings
+		clearly identify what the key does and ideally it should be clear what addon the keybiind is from.
+	
+	The value stored by the key bind is the DIK_keys value of the key. Same number that will be given to the key related callbacks.
+
+	val must be set to 2 and is still manditory.
+	
+	curr and functor  are not curently supported. Post an issue on github describing the usecase you had for them, if it's cool enough they might get fixed.
+
+	Old (pre 1.6.0) versions of MCM will not display key_bind and calling ui_mcm.get for it will return nil, take that into acount if you want reverse compatablity. 
+	
+]]--
+
+
+---------------------------------------------------------------------------------------
+-- Tutorial: Additional Key Bind utilities
+---------------------------------------------------------------------------------------
+
+--[[
+	MCM tracks the held status of the control and shift keys as well as a flag that is true when neither is pressed
+		ui_mcm.MOD_NONE  ui_mcm.MOD_SHIFT and ui_mcm.MOD_CTRL
+		ui_mcm.get_mod_key(val) will return the above flags based on val: 0:MOD_NONE 1:MOD_SHIFT and 2:MOD_CTRL
+		If these somehow get latched they reset when Escape is pressed. Please report cases of latching.
+	
+	MCM provides functions for detecting key double taps and keys that are held down, and single key presses that do not go on to be double or long presses.
+		ui_mcm.double_tap(id, key, [multi_tap]) should be called from on_key_press callback after you have filtered for your key
+			id: 	should be a unique identifier for your event, scriptname and a number work well:"ui_mcm01"
+			key: 	is of course they key passed into the on_key_press callback.
+			multi_tap: if true timer is updated instead of cleared allowing for the detection of triple/quad/ect taps
+			returns: true for a given id and key if less than X ms has elapsed since the last time it was called with that id and key (X is a user configurable value between 100ms and 1000 ms
+					 returns false otherwise. 
+					 If multi_tap is false timer is reset when true is returned preventing the function from returning true twice in a row
+					 If multi_tap is true the function will return true any time the gap between a call and the one before is within the window.
+			
+		ui_mcm.key_hold(id, key, [repeat]) should be called from on_key_hold callback after you have filtered for your key
+			id: 	should be a unique identifer for your event, scriptname and a number work well:"ui_mcm01"
+			key: 	is the key passed into the on_key_hold callback.
+			repeat: Optional. time in seconds. If the key continues to be held down will return true again after this many seconds on a cycle.
+			
+			when called from the on_key_hold callback it will return true after the key has been held down for Y ms (determined by applying a user defined multiplier to X above) and then again every repeat seconds if repeat is provided. sequence resets when key is released.
+
+		ui_mcm.simple_press(id, key, functor) should be called from on_key_press callback after you have filtered for your key
+			id: 	should be a unique identifier for your event, scrip name and a number work well:"ui_mcm01"
+			key: 	is the key passed into the on_key_press callback.
+			function: table {function, parameters}, to be executed when it is determined that the press is not long or double (or multi press in general)
+			
+			Unlike the other two this does not return any thing but instead you give it a function to execute. Using this function you gain exclusivity, your event won't fire when the key is double(multi) taped or held (long press), at the cost of a small bit of input delay. This delay is dependent on the double tap window the used defines in the MCM Key Bind settings.
+
+	The following option entries have translation stings provided by MCM and are setup to be ignored by pre 1.6.0 versions of MCM
+		Note the keybind conflict identification in MCM does NOT look for these and reports conflict on the keybind value alone.
+		
+		With shift and control, radio buton style
+	        {id = "modifier", type = ui_mcm.kb_mod_radio, val = 2, def = 0, hint = "mcm_kb_modifier" , content= { {0,"mcm_kb_mod_none"} , {1,"mcm_kb_mod_shift"} , {2,"mcm_kb_mod_ctrl"},{3,"mcm_kb_mod_alt"}}},
+		With shift and control, list style
+	        {id = "modifier", type = ui_mcm.kb_mod_list, val = 2, def = 0, hint = "mcm_kb_modifier" , content= { {0,"mcm_kb_mod_none"} , {1,"mcm_kb_mod_shift"} , {2,"mcm_kb_mod_ctrl"},{3,"mcm_kb_mod_alt"}}},
+		
+		
+		Single double or long press,  , radio buton style
+            {id = "mode", type = ui_mcm.kb_mod_radio, val = 2, def = 0, hint = "mcm_kb_mode" , content= { {0,"mcm_kb_mode_press"} , {1,"mcm_kb_mode_dtap"} , {2,"mcm_kb_mode_hold"}}},
+		Single double or long press,  , radio buton style
+            {id = "mode", type = ui_mcm.kb_mod_list, val = 2, def = 0, hint = "mcm_kb_mode" , content= { {0,"mcm_kb_mode_press"} , {1,"mcm_kb_mode_dtap"} , {2,"mcm_kb_mode_hold"}}},
+
+	An example script making use of all of these can be found at: https://github.com/RAX-Anomaly/MiniMapToggle/blob/main/gamedata/scripts/mini_map_toggle_mcm.script
+]]--
 
 ------------------------------------------------------------
 -- Tutorial: Examples:
