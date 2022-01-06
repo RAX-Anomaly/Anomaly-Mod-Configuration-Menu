@@ -222,6 +222,9 @@ end
 
 function main_menu:OnMsgOk()
 	if (self.mbox_mode == 2) then
+		if mcm_log then
+			mcm_log.close_logs()
+		end
 		exec_console_cmd("quit")
 	end
 	self.mbox_mode = 0
@@ -249,8 +252,10 @@ function main_menu:OnMessageQuitGame()
 end
 
 function main_menu:OnMessageQuitWin()
+	if mcm_log then
+		mcm_log.close_logs()
+	end
 	exec_console_cmd("quit")
-	mcm_log.close_logs()
 end
 
 

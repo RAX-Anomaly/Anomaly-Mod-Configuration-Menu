@@ -28,6 +28,9 @@ printf(fmt) behaves just like log except that it will print to the xray log and 
 	
 lastly log_table(tbl, name) formats and prints a table to the log
 
+changelog
+1.0.0 inital
+1.0.1 removed unused ltx, corected callback.
 
 --]]
 
@@ -41,7 +44,7 @@ local TIMESTAMP_FREQ = axr_main.config:r_value("mcm", mcm_path.."timestamp", 2, 
 local logging_enabled = axr_main.config:r_value("mcm", mcm_path.."enable", 1, true)
 
 
-local config = ini_file_ex("mcm_log.ltx",true)
+
 local string_gsub   = string.gsub
 local files = {}
 local PATH = getFS():update_path("$logs$","mcm")
@@ -70,8 +73,13 @@ function MCM_Log:__init(prefix)
 end
 
 function MCM_Log:Open_file()
-	if (not files[self.fname]) and logging_enabled then
-		files[self.fname] = assert(io.open(PATH.."/"..self.fname.."_"..ui_mcm.get_session_id()..".log","a+")) 
+	if (not files[self.fname]) and logging_enabled then	
+		local file, msg = io.open(PATH.."/"..self.fname.."_"..ui_mcm.get_session_id()..".log","a+")
+		if not file then
+			printf("!ERROR MCM Logs unable to create log file. Manualy creating the directory appdata/logs/mcm/ may solve this issue.")
+			return
+		end
+		files[self.fname] = file	
 		files[self.fname]:write("======================\n")
 		files[self.fname]:write("=="..os.date("%d%b%Y %X") .."==\n")
 		files[self.fname]:write("=Continuous logging:=\n")
@@ -216,7 +224,7 @@ function on_game_start()
     RegisterScriptCallback("save_state",flush_logs)
     RegisterScriptCallback("main_menu_on_init",flush_logs)
     RegisterScriptCallback("main_menu_on_quit",flush_logs)
-    RegisterScriptCallback("main_menu_on_quit",on_option_change)
+    RegisterScriptCallback("on_option_change",on_option_change)
 	AddUniqueCall(timed_flush)
 end
 		
