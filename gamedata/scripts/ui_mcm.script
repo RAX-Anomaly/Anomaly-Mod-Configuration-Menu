@@ -31,6 +31,10 @@
 					Functions to help identify single, double and long presses of a key.
 					Provided templated mcm option tables for selecting modifier keys and single/double and long presses that include translation strings.
 				Updated documentation at end of this sctipt for all keybind related features.
+		1.6.1 	Fixed xrdebug 1040 crash.
+		1.6.2 	Added a message for when io.open fails to create a file. 
+				Made ui_mcm.script not fail if mcm_log.script is missing.
+				Made debug logging default to false as orginaly intended.
 				
 
 	
@@ -56,8 +60,8 @@
 	
 --]]
 
-VERSION = "1.6.0-beta1"
-MCM_DEBUG = axr_main.config:r_value("mcm", "mcm/mcm_log/debug_logging", 1, false)
+VERSION = "1.6.1"
+MCM_DEBUG = axr_main.config:r_value("mcm", "mcm/mcm_log/debug_logging2", 1, false)
 local enable_debug_prints = false
 ------------------------------------------------------------
 -- Strings and LTX management
@@ -93,11 +97,17 @@ local clr_tree = {
 	[3] = GetARGB(255, 180, 180, 180),
 }
 
-local dbg = mcm_log.new("DBG")
-dbg.enabled = MCM_DEBUG
-dbg.continuous = true
+local dbg = nil
 function print_dbg(...)
-	dbg:log(...)
+	if (not dbg) and MCM_DEBUG and mcm_log then
+		dbg = mcm_log.new("DBG")
+		dbg.enabled = MCM_DEBUG
+		dbg.continuous = true
+	end
+	if dbg then
+		dbg:log(...)
+	end
+	
 	if enable_debug_prints then
 		printf(...)
 	end
@@ -148,7 +158,7 @@ function init_opt_base()
 
 					},},
 					{id = "mcm_all_kb", sh=true    , gr={
-						{ id= "slide_kb"		 	   ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_menu_mcm_kb_all"		,size= {512,50}		},
+						{ id= "slide_kb"		 	   ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_menu_mcm_all_kb"		,size= {512,50}		},
 						{ id= "desc_kb"    	 	,type= "desc"     ,text= "ui_mcm_mcm_desc_kb_all"			 ,clr= {255,125,175,200}	},
 						{ id= "desc_kb2"    	 	,type= "desc"     ,text= "ui_mcm_mcm_desc_kb_all2"			 ,clr= {255,125,175,200}	},
 					},},
@@ -168,7 +178,8 @@ function init_opt_base()
 					{id = "continuous", type = "check", val = 1, def = false},
 					{id = "savefreq", type = "input", val = 2, def = 1000, min = 100, max = 1000000000000000},
 					{id = "timestamp", type = "input", val = 2, def = 1000, min = 1, max = 1000000000000000},
-					{id = "debug_logging", type = "check", val = 1, def = true},
+					{id = "debug_logging", type = "line"},
+					{id = "debug_logging2", type = "check", val = 1, def = false},
 				},},
 
 			},
@@ -194,7 +205,7 @@ function init_opt_base()
 
 
 	init_opt_coder()
-	
+	MCM_DEBUG = get("mcm/mcm_log/debug_logging2")
 end
 
 

@@ -69,10 +69,10 @@
 	<string id="ui_mcm_mcm_mcm_log_timestamp_desc">
 		<text>MCM adds a time stamp to the xray log to make it easier to coordinate events between mcm logs and the xray log. This is the minimum time between those time stamps. If nothing else is printing to the console neither will mcm.</text>
 	</string>
-	<string id="ui_mcm_mcm_mcm_log_debug_logging">
+	<string id="ui_mcm_mcm_mcm_log_debug_logging2">
 		<text>Enable Debug logging.</text>
 	</string>
-	<string id="ui_mcm_mcm_mcm_log_debug_logging_desc">
+	<string id="ui_mcm_mcm_mcm_log_debug_logging2_desc">
 		<text>This enables MCM's own debug logging and should be enabled before reporting bugs with MCM. Other addons may also use this setting to enable thier own logging.</text>
 	</string>
 

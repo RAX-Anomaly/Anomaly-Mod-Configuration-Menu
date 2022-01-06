@@ -69,10 +69,10 @@
 	<string id="ui_mcm_mcm_mcm_log_timestamp_desc">
 		<text>MCM добавляет метку времени к журналу рентгеновского снимка, чтобы упростить координацию событий между журналами mcm и журналом рентгеновского снимка. Это минимальное время между этими отметками времени. Если на консоль ничего не выводится, то и mcm не будет. </text>
 		</string>
-	<string id="ui_mcm_mcm_mcm_log_debug_logging">
+	<string id="ui_mcm_mcm_mcm_log_debug_logging2">
 		<text>Включите ведение журнала отладки.</text>
 	</string>
-	<string id="ui_mcm_mcm_mcm_log_debug_logging_desc">
+	<string id="ui_mcm_mcm_mcm_log_debug_logging2_desc">
 		<text>Это включает собственное ведение журнала отладки MCM и должно быть включено перед сообщением об ошибках с MCM. Другие надстройки также могут использовать этот параметр, чтобы включить собственное ведение журнала. </text>
 		</string>
 
