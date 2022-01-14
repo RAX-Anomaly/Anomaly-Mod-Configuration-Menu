@@ -23,3 +23,4 @@ Change History:
 			Made ui_mcm.script not fail if mcm_log.script is missing.
 			Made debug logging default to false as orginaly intended.
 	1.6.3	Fixed interferance between doubletap and single press when bonund to same key.
+	1.6.4	Missed one place in above fix.
