@@ -35,6 +35,7 @@
 		1.6.2 	Added a message for when io.open fails to create a file. 
 				Made ui_mcm.script not fail if mcm_log.script is missing.
 				Made debug logging default to false as orginaly intended.
+		1.6.3	Fixed interferance between doubletap and single press when bonund to same key.
 				
 
 	
