@@ -442,7 +442,7 @@ function key_hold(id,key, cycle)
 	cycle = cycle or 10000
 	local tg = time_continual()
 	hold[key] = hold[key] or {}
-	if (not hold[key][id]) or (tg - hold[key].id > hold_time*1.5) then
+	if (not hold[key][id]) or (tg - hold[key][id] > hold_time*1.5) then
 		hold[key][id] = tg
 	elseif (tg - hold[key][id] > hold_time ) then			
 		hold[key][id] = tg + cycle * 1000
