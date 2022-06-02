@@ -13,7 +13,10 @@ This is a copy of the Instructions located at the end of the sctipt.
 	1. How to read these options in your script (RavenAscendant)
 	2. How to add new options (Tronex orginal turotial from ui_options)
 	3. How to make your script talk to MCM
-	4. Examples
+	4. Using dph-hcl's script for save game specific MCM options
+	5. Additional information on key_bind
+	6. Additional Key Bind utilities
+	7. Examples
 
 ]]--
 
@@ -359,8 +362,8 @@ This is a copy of the Instructions located at the end of the sctipt.
 
 --[[
 	MCM tracks the held status of the control and shift keys as well as a flag that is true when neither is pressed
-		ui_mcm.MOD_NONE  ui_mcm.MOD_SHIFT and ui_mcm.MOD_CTRL
-		ui_mcm.get_mod_key(val) will return the above flags based on val: 0:MOD_NONE 1:MOD_SHIFT and 2:MOD_CTRL
+		ui_mcm.MOD_NONE  ui_mcm.MOD_SHIFT and ui_mcm.MOD_CTRL ui_mcm.MOD_ALT
+		ui_mcm.get_mod_key(val) will return the above flags based on val: 0:MOD_NONE, 1:MOD_SHIFT, 2:MOD_CTRL and 3:MOD_ALT
 		If these somehow get latched they reset when Escape is pressed. Please report cases of latching.
 	
 	MCM provides functions for detecting key double taps and keys that are held down, and single key presses that do not go on to be double or long presses.
