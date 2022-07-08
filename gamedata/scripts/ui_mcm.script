@@ -20,7 +20,7 @@
 		1.6.0 	Adopted https://semver.org/spec/v1.0.0.html versioning spec for reasons.
 				Far left list sorted alphabeticaly, except MCM will always be at the top to serve as a landing page.
 				Added logging utility see instruction in mcm_log.script
-				Now pass true to on_options_change callback to make it posible to identify when it is coming from mcm
+				Now pass true to on_option_change callback to make it posible to identify when it is coming from mcm
 				MCM tracks a session ID that only increments when game exe is launched. ui_mcm.get_session_id()
 				Added assert to identify missing val fields as that tends to result in hard to diagnose errors.
 				Added assert to block calling get() while mcm is building the options tree.
@@ -36,7 +36,17 @@
 				Made ui_mcm.script not fail if mcm_log.script is missing.
 				Made debug logging default to false as orginaly intended.
 		1.6.3	Fixed interferance between doubletap and single press when bonund to same key.
-		1.6.4	Missed one line in above fix.		
+		1.6.4	Missed one place in above fix.			
+		1.6.5-b1	Added support for unbound MCM keybinds
+				pressing ESC while binding a key will unbind the key, clicking will still cancel the bind process
+				-1 is the value for unbound
+				unbound keys will not be reported as conflicting
+				added mouse4-8 as valid keybinds.
+				updated mcm_log to 1.0.2 fixing a crash on quit.
+				chnaged the doubletap window to be 200ms. down from 500. this will make mcm keybinds feel more responsive. made it adjustable by increments of 5
+				special handeling for key wrappers in the keybinds list
+				
+				
 
 	
 	
@@ -61,7 +71,7 @@
 	
 --]]
 
-VERSION = "1.6.1"
+VERSION = "1.6.5-b1"
 MCM_DEBUG = axr_main.config:r_value("mcm", "mcm/mcm_log/debug_logging2", 1, false)
 local enable_debug_prints = false
 ------------------------------------------------------------
@@ -138,6 +148,12 @@ local allowed_type = { -- ignore tables from these types in temp tables
 local key_by_path = {}
 local paths_by_key = {}
 local gathering = false
+
+if AddScriptCallback then
+	AddScriptCallback("mcm_option_change")
+end
+
+
 function init_opt_base()
 	print_dbg("MCM options reset.")
 	get_session_id()
@@ -154,7 +170,7 @@ function init_opt_base()
 						{ id= "slide_kb"		 	   ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_menu_mcm_kb"		,size= {512,50}		},
 						{ id= "desc_kb"    	 	,type= "desc"     ,text= "ui_mcm_mcm_desc_kb"			 ,clr= {255,125,175,200}	},
 						{ id= "desc_kb2"    	 	,type= "desc"     ,text= "ui_mcm_mcm_desc_kb2"			 ,clr= {255,125,175,200}	},
-						{id = "dtaptime", type = "track", val = 2, def = 500, min = 100, max = 750, step = 1},
+						{id = "dtaptime2", type = "track", val = 2, def = 200, min = 100, max = 750, step = 5},
 						{id = "presstime", type = "track", val = 2, def = 1.5, min = 1.2, max = 2, step = 0.01, prec = 2},
 
 					},},
@@ -231,6 +247,9 @@ function init_opt_coder(kb_meta)
 					temp.curr = {get,path}
 					temp.hint = temp.hint or id.."_"..gr[i].id
 					temp.functor = {function(p,v) set(p,v) update_conflict(p,v) end, path  }
+					if path:find("mcm/key_wrapper/") then
+						temp.precondition = {function() return false end} --temp.precondition = {get, path:sub(1, -).."enable"}
+					end
 					kb_meta.all[#kb_meta.all+1] = dup_table(temp)
 					temp.precondition = {get_conflict, path}
 					kb_meta.conflict[#kb_meta.conflict+1] = dup_table(temp)
@@ -391,9 +410,9 @@ end
 function get_conflict(path, key)
 	local k = key or key_by_path[path]
 	print_dbg("path:%s, key:%s, k:%s", path, type(key), type(k))
-
 	assert(k, "No key found for path")
 	k = tonumber(k)
+	if k == -1 then return false end
 	if  dik_to_bind(k) ~= dik_to_bind(1000) then --conflicts with engine keybind
 		print_dbg("bind:%s", dik_to_bind(k))
 		return true
@@ -424,7 +443,7 @@ function double_tap(id, key, multi_tap)
 		tap[key][id] = tg
 		return false
 	end
-	local dtaptime = get("mcm/mcm_kb/mcm_kb_main/dtaptime")
+	local dtaptime = get("mcm/mcm_kb/mcm_kb_main/dtaptime2")
 	
 	if (tg - tap[key][id] <= dtaptime) then --if inside the dtap window
 		tap[key][id] = multi_tap and tg -- if multi_tap set timer for next tap, else clear it.
@@ -438,7 +457,7 @@ end
 
 local hold = {}
 function key_hold(id,key, cycle)
-	local dtaptime = get("mcm/mcm_kb/mcm_kb_main/dtaptime")
+	local dtaptime = get("mcm/mcm_kb/mcm_kb_main/dtaptime2")
 	local hold_time = get("mcm/mcm_kb/mcm_kb_main/presstime") * dtaptime
 	cycle = cycle or 10000
 	local tg = time_continual()
@@ -1912,6 +1931,7 @@ function UIMCM:OnButton_Cancel()
 end
 
 function UIMCM:On_Accept()
+	self.Change_Done = {}
 	for id, val in pairs(opt_temp) do
 	
 		local v = self:GetOption(id)
@@ -1926,7 +1946,7 @@ function UIMCM:On_Accept()
 			self.Save_AXR = true
 		end
 		
-		self.Change_Done = true
+		self.Change_Done[id] = true
 		
 		-- Execute functors if found
 		if v.functor then
@@ -1974,6 +1994,9 @@ function UIMCM:On_Accept()
 			self.Save_CFG = true
 		end
 	end
+	if #self.Change_Done == 0 then
+		self.Change_Done = false
+	end
 	
 
 	
@@ -1996,7 +2019,11 @@ function UIMCM:On_Accept()
 		print_dbg("% Sent callback (on_option_change)")
 		SendScriptCallback("on_option_change", true)
 	end
-	
+	if AddScriptCallback and self.Change_Done then
+		print_dbg("% Sent callback (mcm_option_change)")
+		SendScriptCallback("mcm_option_change", self.Change_Done )
+	end
+
 	-- Clear cache
 	empty_table(opt_temp)
 	empty_table(opt_backup)
@@ -2070,7 +2097,7 @@ function UIMCM:OnKeyboard(dik, keyboard_action)
 		
 			if dik == DIK_keys.DIK_ESCAPE then
 				if self.k_binder then
-					self.k_binder()
+					self.k_binder(-1)
 				else
 					self:OnButton_Cancel()
 				end
