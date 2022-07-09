@@ -1931,7 +1931,7 @@ function UIMCM:OnButton_Cancel()
 end
 
 function UIMCM:On_Accept()
-	self.Change_Done = {}
+	self.Changes ={}
 	for id, val in pairs(opt_temp) do
 	
 		local v = self:GetOption(id)
@@ -1946,8 +1946,8 @@ function UIMCM:On_Accept()
 			self.Save_AXR = true
 		end
 		
-		self.Change_Done[id] = true
-		
+		self.Change_Done = true
+		self.Changes[id] = true
 		-- Execute functors if found
 		if v.functor then
 			if v.postcondition then
@@ -1994,9 +1994,6 @@ function UIMCM:On_Accept()
 			self.Save_CFG = true
 		end
 	end
-	if #self.Change_Done == 0 then
-		self.Change_Done = false
-	end
 	
 
 	
@@ -2021,7 +2018,7 @@ function UIMCM:On_Accept()
 	end
 	if AddScriptCallback and self.Change_Done then
 		print_dbg("% Sent callback (mcm_option_change)")
-		SendScriptCallback("mcm_option_change", self.Change_Done )
+		SendScriptCallback("mcm_option_change", self.Changes )
 	end
 
 	-- Clear cache
