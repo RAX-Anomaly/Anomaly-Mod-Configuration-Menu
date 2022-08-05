@@ -484,7 +484,7 @@ function simple_press(id, key, functor,...)
 	local tg = time_continual()
 	hold[key] = hold[key] or {}
 	hold[key]["mcm_single_"..id] = tg
-	local dtaptime = get("mcm/mcm_kb/mcm_kb_main/dtaptime")
+	local dtaptime = get("mcm/mcm_kb/mcm_kb_main/dtaptime2")
 	if dtap then
 		RemoveTimeEvent("mcm_single_press",id.."_mcm_single_"..key)
 	else
