@@ -31,6 +31,7 @@ lastly log_table(tbl, name) formats and prints a table to the log
 changelog
 1.0.0 inital
 1.0.1 removed unused ltx, corected callback.
+1.0.2 adding error handeling to more file operations
 
 --]]
 
@@ -183,7 +184,7 @@ function close_logs()
 		flist:Sort(5)
 		for	it=2, f_cnt-1 do
 			local file = flist:GetAt(it)
-			f:file_delete(f:update_path("$mcmlogs$",file:NameFull()))
+			pcall(function() f:file_delete(f:update_path("$mcmlogs$",file:NameFull())) end)
 		end
 	end
 

@@ -24,3 +24,12 @@ Change History:
 			Made debug logging default to false as orginaly intended.
 	1.6.3	Fixed interferance between doubletap and single press when bonund to same key.
 	1.6.4	Missed one place in above fix.
+	1.6.5	Added support for unbound MCM keybinds
+			pressing ESC while binding a key will unbind the key, clicking will still cancel the bind process
+			-1 is the value for unbound
+			unbound keys will not be reported as conflicting
+			added mouse4-8 as valid keybinds.
+			updated mcm_log to 1.0.2 fixing a crash on quit.
+			chnaged the doubletap window to be 200ms. down from 500. this will make mcm keybinds feel more responsive. made it adjustable by increments of 5
+			special handeling for key wrappers in the keybinds list
+			fixed a bug in dph-hcl's script for save game specific MCM options (HarukaSai)
