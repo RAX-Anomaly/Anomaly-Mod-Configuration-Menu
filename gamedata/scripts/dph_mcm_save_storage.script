@@ -62,7 +62,7 @@ local function compare_paths(mt, pt)
     local mm = str_explode(m, "/")
     local pp = str_explode(p, "/")
     for i, seg in ipairs(mm) do
-        if (not pp[i]) or (not seg == pp[i]) then
+        if (not pp[i]) or (seg ~= pp[i]) then
             return false
         end
         return true
