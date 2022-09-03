@@ -177,7 +177,7 @@ function close_logs()
 	--printf("MCM_Log close fsgameupdated:%s",fsgameupdated)
 	if not fsgameupdated then return end
 	for fname,file in pairs(files) do
-		file:close()
+		pcall(function() file:close() end )
 		local f	= getFS()
 		local flist = f:file_list_open_ex("$mcmlogs$",bit_or(FS.FS_ListFiles,FS.FS_RootOnly),fname.."*")
 		local f_cnt = flist:Size()
