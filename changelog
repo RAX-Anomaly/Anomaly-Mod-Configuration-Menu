@@ -33,3 +33,4 @@ Change History:
 			chnaged the doubletap window to be 200ms. down from 500. this will make mcm keybinds feel more responsive. made it adjustable by increments of 5
 			special handeling for key wrappers in the keybinds list
 			fixed a bug in dph-hcl's script for save game specific MCM options (HarukaSai)
+	1.6.6	Actually updated mcm_log to 1.0.2 fixing a crash on quit.
