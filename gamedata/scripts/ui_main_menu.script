@@ -30,6 +30,60 @@ function main_menu:__init() super()
 	if not (level.present()) then
 		xrs_debug_tools.on_game_start()
 	end
+
+	--Do not update dependencies for in progress game, and only update once, per session.
+	self.mcm_dependants = {}
+	local enabled = (not string.find(command_line(), "-mcmnodl")) and ui_mcm.get("mcm/mcm_dependencies/enable")
+	local session_last_dependancy_update = axr_main.config:r_value("mcm", "dependencies_handled", 2, 0)
+	if (not level.present()) and (session_last_dependancy_update ~= ui_mcm.get_session_id()) then
+		self:initialize_mcm_dependency_handler()
+		axr_main.config:w_value("mcm", "dependencies_handled", ui_mcm.get_session_id())
+		axr_main.config:save()
+	end
+end
+
+function main_menu:initialize_mcm_dependency_handler(force)
+	--When gathering dependencies from mods use the dictionary approach
+	--Always set the value when it equals GET
+	--Only set VERIFY when the entry doesn't exist or it's not GET
+	--Basically GET takes priority over VERIFY
+	local verify_only = (not force) and (DEV_DEBUG or ui_mcm.get("mcm/mcm_dependencies/verify") or string.find(command_line(), "-mcmvo"))
+	local dependencies = {
+	--	["some_example_mod"] = "GET",
+	--	["some_insane_mod"] = "GET",
+	--	["some_crazy_mod"] = "GET"
+	}
+	
+	local script_list = ui_mcm.get_mcm_script_list()
+	for i=1,#script_list do
+		local temp_dependancy = _G[ script_list[i] ].on_dependancy_load and _G[ script_list[i] ].on_dependancy_load() or {}
+		for k, v in pairs(temp_dependancy) do
+			if v == "VERIFY" and (not dependencies[k]) or v == "GET" then
+				dependencies[k] = verify_only and "VERIFY" or v
+			end
+			if self.mcm_dependants[k] then
+				self.mcm_dependants[k][#self.mcm_dependants[k] + 1] = script_list[i]
+			else
+				self.mcm_dependants[k] = {script_list[i]}
+			end
+		end
+	end
+	
+			
+
+	
+
+	self:mcm_dependency_handler_lock_ui()
+	self:mcm_dependency_handler_hide_progress()
+
+	self.dependency_handler = mcm_dependency_handler.mcm_dependency_handler(dependencies)
+	self.dependency_handler:register_callback(mcm_dependency_handler.CALLBACK_TYPE.SHOW_PROGRESS,function() self:mcm_dependency_handler_show_progress() end)
+	self.dependency_handler:register_callback(mcm_dependency_handler.CALLBACK_TYPE.HIDE_PROGRESS,function() self:mcm_dependency_handler_hide_progress() end)
+	self.dependency_handler:register_callback(mcm_dependency_handler.CALLBACK_TYPE.UPDATE_PROGRESS,function() self:mcm_dependency_handler_update_progress() end)
+	self.dependency_handler:register_callback(mcm_dependency_handler.CALLBACK_TYPE.UPDATE_MESSAGE,function(text) self:mcm_dependency_handler_update_message(text) end)
+	self.dependency_handler:register_callback(mcm_dependency_handler.CALLBACK_TYPE.LOCK_UI,function() self:mcm_dependency_handler_lock_ui() end)
+	self.dependency_handler:register_callback(mcm_dependency_handler.CALLBACK_TYPE.UNLOCK_UI,function() self:mcm_dependency_handler_unlock_ui() end)
+	self.dependency_handler:start() --starts downloading everything
 end
 
 function main_menu:__finalize()
@@ -64,6 +118,11 @@ function main_menu:InitControls()
 	
 	self.msg_wnd:Show(false)
 	self.msg_wnd:SetColor(GetARGB(255,0,0,0))
+
+	--self.dependency_message = xml:InitProgressBar("dependency_progress", self)
+
+	self.dependency_message = xml:InitTextWnd("dependency_message",self)
+	self.dependency_progress = xml:InitProgressBar("dependency_progress", self)
 end
 
 function main_menu:InitCallBacks()
@@ -99,15 +158,24 @@ function main_menu:Update()
 			self.msg_wnd:Show(false)
 		end
 	end
+	if self.dependency_handler then
+		self.dependency_handler:listen()
+	end
+	
 end 
 
 function main_menu:Show(f)
 	self.shniaga:SetVisibleMagnifier(f)
 end
 
+function main_menu:Enable(state)
+	state = (state == nil) or state --nil is true not false
+	self.block_input = not state
+end
 
 function main_menu:OnButton_last_save()	
-
+	if self.block_input then return end
+	
     if ( alife() == nil) then
         local flist = getFS():file_list_open_ex("$game_saves$",bit_or(FS.FS_ListFiles,FS.FS_RootOnly),"*"..".scop")
         flist:Sort(FS.FS_sort_by_modif_down)
@@ -133,16 +201,22 @@ function main_menu:OnButton_last_save()
 end
 
 function main_menu:OnButton_new_game()
+	if self.block_input then return end
+	
 	--game.start_tutorial("credits_seq")
 	self:ShowFactionUI()
 end
 
 function main_menu:OnButton_quit_clicked()
+	if self.block_input then return end
+	
 	self.message_box:InitMessageBox("message_box_quit_windows")
 	self.message_box:ShowDialog(true)
 end
 
 function main_menu:OnButton_disconnect_clicked()
+	if self.block_input then return end
+	
 
 	self.message_box:InitMessageBox("message_box_quit_game")
 
@@ -155,6 +229,8 @@ function main_menu:OnButton_disconnect_clicked()
 end
 
 function main_menu:OnButton_save_clicked()
+	if self.block_input then return end
+	
 	
 	--	Saving will be interrupted if flags.ret is set to true by a custom script that have "on_before_save_input"
 	if level.present() then
@@ -177,6 +253,8 @@ function main_menu:OnButton_save_clicked()
 end
 
 function main_menu:OnButton_options_clicked()
+	if self.block_input then return end
+	
 	if (self.opt_dlg == nil) then
 		self.opt_dlg = ui_options.UIOptions()
 		self.opt_dlg.owner = self
@@ -189,6 +267,8 @@ function main_menu:OnButton_options_clicked()
 end
 
 function main_menu:OnButton_mcm_clicked()
+	if self.block_input then return end
+	
 	printf("MCMBTN press")
 	if (self.mcm_dlg == nil) then
 		self.mcm_dlg = ui_mcm.UIMCM()
@@ -202,6 +282,8 @@ function main_menu:OnButton_mcm_clicked()
 end
 
 function main_menu:OnButton_load_clicked()
+	if self.block_input then return end
+	
 	
 	if self.load_dlg ==nil then
 		self.load_dlg = ui_load_dialog.UILoadDialog()
@@ -215,6 +297,8 @@ function main_menu:OnButton_load_clicked()
 end
 
 function main_menu:OnButton_return_game()
+	if self.block_input then return end
+	
 	exec_console_cmd("main_menu off")
 	SendScriptCallback("main_menu_on_quit",self)
 end
@@ -299,6 +383,9 @@ end
 function main_menu:OnKeyboard(dik, keyboard_action)  --virtual function
 	CUIScriptWnd.OnKeyboard(self,dik,keyboard_action)
 	local bind = dik_to_bind(dik)
+
+	if self.block_input then return true end -- consider adding an override.
+	
 
 	SendScriptCallback("main_menu_on_keyboard",dik,keyboard_action,self,level.present())
 
@@ -400,4 +487,39 @@ function main_menu:SetMsg(text,tmr,align)
 	self.msg_wnd:SetWndPos(vector2():set(0,80))
 
 	self.msg_wnd_timer = 100*tmr
+end
+
+
+--=====================================================================
+--                  DEPENDENCY HANDLER CALLBACKS
+--=====================================================================
+
+function main_menu:mcm_dependency_handler_show_progress()
+	self.dependency_message:Show(true)
+	self.dependency_progress:Show(true)
+end
+
+function main_menu:mcm_dependency_handler_hide_progress()
+	self.dependency_message:Show(false)
+	self.dependency_progress:Show(false)
+end
+
+function main_menu:mcm_dependency_handler_update_progress()
+	if self.dependency_handler.max_step_count == nil or self.dependency_handler.step_count == nil then
+		return
+	end
+
+	self.dependency_progress:SetProgressPos(self.dependency_handler.step_count / self.dependency_handler.max_step_count)
+end
+
+function main_menu:mcm_dependency_handler_update_message(text)
+	self.dependency_message:SetText(text)
+end
+
+function main_menu:mcm_dependency_handler_lock_ui()
+	self:Enable(false)
+end
+
+function main_menu:mcm_dependency_handler_unlock_ui()
+	self:Enable(true)
 end

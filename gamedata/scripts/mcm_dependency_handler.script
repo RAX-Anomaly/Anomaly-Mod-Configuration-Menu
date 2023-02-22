@@ -1,0 +1,264 @@
+REQUEST_TYPE =
+{
+    DEPENDENCY_REGISTRY = 1,
+    DEPENDENCY_FILE = 2,
+}
+
+CALLBACK_TYPE =
+{
+    SHOW_PROGRESS = 1,
+    HIDE_PROGRESS = 2,
+    UPDATE_PROGRESS = 3,
+    UPDATE_MESSAGE = 4,
+    LOCK_UI = 5,
+    UNLOCK_UI = 6,    
+}
+
+local fsroot = getFS():update_path("$fs_root$","")
+class "mcm_dependency_handler"
+
+function mcm_dependency_handler:__init(dependencies)
+	self.requested_dependencies = { }
+	self.requested_dependencies_size = 0
+
+    if dependencies ~= nil then
+		self.requested_dependencies = dependencies
+		self.requested_dependencies_size = self:get_size(dependencies)
+	end	
+
+    self.client = require("mcm_pollnet")
+    self.client.log = function(message) log(message) end
+    self.md5 = require("mcm_md5")
+
+    self.callbacks = { 
+		[CALLBACK_TYPE.SHOW_PROGRESS] = nil,
+		[CALLBACK_TYPE.HIDE_PROGRESS] = nil,
+		[CALLBACK_TYPE.UPDATE_PROGRESS] = nil,
+		[CALLBACK_TYPE.UPDATE_MESSAGE] = nil,
+		[CALLBACK_TYPE.LOCK_UI] = nil,
+		[CALLBACK_TYPE.UNLOCK_UI] = nil	
+	}
+
+	self.registry_dependencies = { }
+	self.invalid_files = { }
+
+	self.current_dependency_name = nil
+	self.current_dependency_file_index = 0
+	self.current_dependency_file_path = nil
+
+	self.start_time = os.clock()
+
+	self.step_count = 0
+	self.max_step_count = nil
+
+	table.insert(self.client.callbacks[REQUEST_TYPE.DEPENDENCY_REGISTRY], function(data) self:on_registry_received(data) end)
+	table.insert(self.client.callbacks[REQUEST_TYPE.DEPENDENCY_FILE], function(data) self:on_dependency_received(data) end)
+end
+
+function mcm_dependency_handler:register_callback(callback_type, func)
+	if callback_type < CALLBACK_TYPE.SHOW_PROGRESS or callback_type > CALLBACK_TYPE.UNLOCK_UI or func == nil then
+		return
+	end
+
+	self.callbacks[callback_type] = func
+end
+
+function mcm_dependency_handler:listen()
+	self.client.listen()
+end
+
+function mcm_dependency_handler:start()
+	self.client.get_registry()
+end
+
+function mcm_dependency_handler:on_registry_received(data)
+	if data == nil or data == "" then
+		log("[MCM] [Dependency] Failed to receive the dependency registry")
+		return
+	end
+
+	self.registry_dependencies = self:process_registry(data)
+	if self.registry_dependencies == nil then
+		log("[MCM] [Dependency] Failed to process the dependency registry")
+		return
+	end
+	
+	for name, files in pairs(self.registry_dependencies) do
+		for _, file in pairs(files) do
+			log("[MCM] [Dependency] Name: " .. name .. " CheckSum: " .. file.checksum .. " Path: " .. file.path)
+		end		
+	end
+
+	self:verify_dependencies()	
+end
+
+function mcm_dependency_handler:process_registry(data)
+	local result = { }
+
+	local lines = self:string_to_lines(data)
+	
+	for line in lines do
+		local values = str_explode(line,' ')
+		if #values < 3 then
+			log("[MCM] [Dependency] Dependency values are missing")
+			return nil
+		end
+
+		if result[values[1]] == nil then
+			result[values[1]] = {}
+		end
+
+		local dependency = {
+			name = values[1],
+			checksum = values[2],
+			path = values[3]
+		}
+
+		table.insert(result[values[1]], dependency)
+	end
+
+	return result
+end
+
+function mcm_dependency_handler:verify_dependencies()
+	if self.requested_dependencies_size == 0 then
+		log("[MCM] [Dependency] Finished getting dependencies in "..os.clock() - self.start_time .. " - No dependencies were requested")
+		self:hide_progress()
+		self:unlock_ui()
+		return
+	end
+
+	for name, files in pairs(self.registry_dependencies) do
+		for file_index, file in pairs(files) do
+			file.valid = self:verify_dependency_file(name, file.path, file.checksum)
+			file.method = self.requested_dependencies[name]
+			if file.valid == false and file.method == "GET" then
+				table.insert(self.invalid_files, file)
+			end
+		end
+	end
+
+	self.max_step_count = #self.invalid_files
+	self.current_dependency_file_index = 0
+
+	self:show_progress()
+	self:get_next_dependency_file()	
+end
+
+function mcm_dependency_handler:verify_dependency_file(name, path, registry_checksum)
+	log("[MCM] [Dependency] Verifying: " .. path)
+
+	local file = io.open(fsroot..path,"rb")
+    if file == nil then
+        log("[MCM] [Dependency] Could not verify a dependency file: " .. path)
+        return false
+    end
+
+    local content = file:read("*all")
+    io.close(file)
+
+    local checksum = self.md5.sumhexa(content)
+    if registry_checksum ~= checksum then
+    	log("[MCM] [Dependency] Checksum invalid: File: " .. path .. " Registry CheckSum: " .. registry_checksum .. " File CheckSum: " .. checksum)
+    	return false
+    end
+
+    log("[MCM] [Dependency] Verified Successfully: " .. path)
+    return true
+end
+
+function mcm_dependency_handler:get_next_dependency_file()
+	if #self.invalid_files == 0 then
+		log("[MCM] [Dependency] Finished getting dependencies in "..os.clock() - self.start_time .. " - All dependencies were validated successfully")
+		self:hide_progress()
+		self:unlock_ui()
+		return
+	end
+
+	self.current_dependency_file_index = self.current_dependency_file_index + 1
+	self.current_dependency_name = self.invalid_files[self.current_dependency_file_index].name
+	self.current_dependency_file_path = self.invalid_files[self.current_dependency_file_index].path
+	self:update_message("Downloading: " .. self.current_dependency_file_path .." ["..self.current_dependency_name.."]")
+	self.client.get_dependency(self.current_dependency_name.."/"..self.current_dependency_file_path)
+end
+
+function mcm_dependency_handler:on_dependency_received(data)
+	if data == nil or data == "" then
+		log("[MCM] [Dependency] Failed to receive the dependency: " .. self.current_dependency_file_path)
+	else
+		local file = io.open(fsroot..self.current_dependency_file_path,"w")
+        if file == nil then
+            log("[MCM] [Dependency] Could not create a dependency file: " .. self.current_dependency_file_path)
+            return
+        end
+
+        file:write(data)
+        io.close(file)
+
+        log("[MCM] [Dependency] Downloaded: " .. self.current_dependency_file_path)
+        self:increase_step_count()
+
+        if self.current_dependency_file_index < #self.invalid_files then
+			self:get_next_dependency_file(self.current_dependency_name)
+        else
+        	log("[MCM] [Dependency] Finished getting dependencies in "..os.clock() - self.start_time .. " - Finished downloading all dependencies")
+        	self:hide_progress()
+        	self:unlock_ui()       	
+        end        
+	end
+end
+
+function mcm_dependency_handler:string_to_lines(s)
+        if s:sub(-1)~="\n" then s=s.."\n" end
+        return s:gmatch("(.-)\n")
+end
+
+function mcm_dependency_handler:get_size(col)
+	local size = 0
+	for k,v in pairs(col) do
+		size = size + 1
+	end
+	return size
+end
+
+function mcm_dependency_handler:show_progress()
+	if self.callbacks[CALLBACK_TYPE.SHOW_PROGRESS] ~= nil then
+    	self.callbacks[CALLBACK_TYPE.SHOW_PROGRESS]()
+    end
+end
+
+function mcm_dependency_handler:hide_progress()
+	if self.callbacks[CALLBACK_TYPE.HIDE_PROGRESS] ~= nil then
+    	self.callbacks[CALLBACK_TYPE.HIDE_PROGRESS]()
+    end
+end
+
+function mcm_dependency_handler:increase_step_count()
+	self.step_count = self.step_count + 1
+
+    if self.callbacks[CALLBACK_TYPE.UPDATE_PROGRESS] ~= nil then
+    	self.callbacks[CALLBACK_TYPE.UPDATE_PROGRESS]()
+    end
+end
+
+function mcm_dependency_handler:update_message(text)
+	if text == nil or text == "" then
+		return
+	end
+
+	if self.callbacks[CALLBACK_TYPE.UPDATE_MESSAGE] ~= nil then
+    	self.callbacks[CALLBACK_TYPE.UPDATE_MESSAGE](text)
+    end
+end
+
+function mcm_dependency_handler:lock_ui()
+	if self.callbacks[CALLBACK_TYPE.LOCK_UI] ~= nil then
+    	self.callbacks[CALLBACK_TYPE.LOCK_UI]()
+    end
+end
+
+function mcm_dependency_handler:unlock_ui()
+	if self.callbacks[CALLBACK_TYPE.UNLOCK_UI] ~= nil then
+    	self.callbacks[CALLBACK_TYPE.UNLOCK_UI]()
+    end
+end

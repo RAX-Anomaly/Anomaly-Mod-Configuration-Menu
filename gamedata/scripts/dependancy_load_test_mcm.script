@@ -1,0 +1,10 @@
+
+
+
+function on_dependancy_load()
+	return {
+		["some_example_mod"] = "GET",
+		["some_insane_mod"] = "GET",
+		["some_crazy_mod"] = "GET"
+	}
+end

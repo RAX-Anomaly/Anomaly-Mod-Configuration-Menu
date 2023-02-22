@@ -110,7 +110,7 @@ local clr_tree = {
 	[2] = GetARGB(255, 180, 180, 180),
 	[3] = GetARGB(255, 180, 180, 180),
 }
-
+local mcm_script_list
 local dbg = nil
 function print_dbg(...)
 	if (not dbg) and MCM_DEBUG and mcm_log then
@@ -200,6 +200,13 @@ function init_opt_base()
 					{id = "timestamp", type = "input", val = 2, def = 1000, min = 1, max = 1000000000000000},
 					{id = "debug_logging", type = "line"},
 					{id = "debug_logging2", type = "check", val = 1, def = false},
+				},},
+				{id = "mcm_dependencies", sh=true    , gr={
+					
+					{ id= "desc_log"    	 	,type= "desc"     ,text= "ui_mcm_mcm_desc_dependencies"			 ,clr= {255,125,175,200}	},
+					{id = "enable", type = "check", val = 1, def = true},
+					{id = "verify", type = "check", val = 1, def = false},
+					
 				},},
 
 			},
@@ -309,7 +316,7 @@ function gather_options()
 		--printf("%s size=%s",file_name,file:Size())
 		if (file:Size() > 0 and ignore[file_name] ~= true) then
 			file_name = file_name:sub(0,file_name:len()-7)
-			if (_G[file_name] and _G[file_name].on_mcm_load) then
+			if (_G[file_name] ) then
 				size_t = size_t + 1 
 				t[size_t] = file_name -- load all scripts first
 			end
@@ -318,7 +325,10 @@ function gather_options()
 	for i=1,#t do
 		--printf("%s.on_game_start()",t[i])
 		local temp = nil
-		temp, name = _G[ t[i] ].on_mcm_load(options) -- passing options by referance added in AMCM 1.1 if you use this, nil check, emphasise updating MCM in your mod desc or something
+		local name = nil
+		if _G[ t[i] ].on_mcm_load then
+			temp, name =  _G[ t[i] ].on_mcm_load(options) -- passing options by referance added in AMCM 1.1 if you use this, nil check, emphasise updating MCM in your mod desc or something
+		end
 		if temp and name then
 			local collect = false
 			for j=1, #options do
@@ -337,7 +347,7 @@ function gather_options()
 			table.insert(options, temp)
 		end
 	end
-
+	mcm_script_list = t
 end
 
 
@@ -548,6 +558,14 @@ end
 
 
 -- Utilities
+
+function get_mcm_script_list()
+	if not mcm_script_list then
+		init_opt_base()
+	end
+	return dup_table(mcm_script_list)
+end
+
 function is_int(num)
 	return (m_floor(num) == num)
 end
