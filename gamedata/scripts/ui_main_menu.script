@@ -393,7 +393,7 @@ function main_menu:OnKeyboard(dik, keyboard_action)  --virtual function
 		if (level.present()) then 
 			if (dik == DIK_keys.DIK_ESCAPE) then
 				if (db.actor and db.actor:alive()) or (IsGameTypeSingle() ~= true) then
-					self.OnButton_return_game()
+					self:OnButton_return_game()
 				end
 				return true
 			elseif (bind == key_bindings.kQUICK_SAVE) then
