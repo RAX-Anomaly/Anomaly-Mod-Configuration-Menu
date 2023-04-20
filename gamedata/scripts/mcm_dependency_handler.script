@@ -187,7 +187,15 @@ function mcm_dependency_handler:on_dependency_received(data)
 		log("[MCM] [Dependency] Failed to receive the dependency: " .. self.current_dependency_file_path)
 	else
 		local file = io.open(fsroot..self.current_dependency_file_path,"w")
-        if file == nil then
+         if file == nil then
+            local temp_ini = ini_file(fsroot..self.current_dependency_file_path)
+	    temp_ini:set_readonly(false)
+	    temp_ini:r_string("foo","bar")
+	    temp_ini:save_as(fsroot..self.current_dependency_file_path)
+	    temp_ini:close()
+           file = io.open(fsroot..self.current_dependency_file_path,"w") 
+        end
+       if file == nil then
             log("[MCM] [Dependency] Could not create a dependency file: " .. self.current_dependency_file_path)
             return
         end
