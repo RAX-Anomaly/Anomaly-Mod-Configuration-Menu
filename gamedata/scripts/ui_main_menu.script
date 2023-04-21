@@ -47,7 +47,7 @@ function main_menu:initialize_mcm_dependency_handler(force)
 	--Always set the value when it equals GET
 	--Only set VERIFY when the entry doesn't exist or it's not GET
 	--Basically GET takes priority over VERIFY
-	local verify_only = (not force) and (DEV_DEBUG or ui_mcm.get("mcm/mcm_dependencies/verify") or string.find(command_line(), "-mcmvo"))
+	local verify_only = (not force) and (ui_mcm.get("mcm/mcm_dependencies/verify") or string.find(command_line(), "-mcmvo"))
 	local dependencies = {
 	--	["some_example_mod"] = "GET",
 	--	["some_insane_mod"] = "GET",
