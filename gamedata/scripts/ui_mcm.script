@@ -1029,7 +1029,8 @@ function UIMCM:Register_Line(xml, handler, v)
 		}
 		local flags = {
 			etype 		= "line",
-		}		ui_mcm.exec(unpack(v.ui_hook_functor),wrapbox,handlers,v,flags)
+		}
+		ui_mcm.exec(unpack(v.ui_hook_functor),wrapbox,handlers,v,flags)
 	end
 	
 	return (line:GetHeight() + 10)
@@ -1106,7 +1107,6 @@ function UIMCM:Register_Slide(xml, handler, v)
 end
 
 function UIMCM:Register_Title(xml, handler, v)
-	printf("Register_Title")
 	local title = xml:InitTextWnd("elements:title_" .. (v.align or "l"), handler)
 	title:SetText( game.translate_string(v.text) )
 	title:AdjustHeightToText()
@@ -2041,7 +2041,6 @@ function UIMCM:CacheValue(path, opt, value, v)
 	-- Update state
 	self:UpdatePending()
 	if enable_ui_functors and v and v.on_selection_functor then
-		printf("Notifying on_selection_functor of value selection for %s/%s = %s",path,opt,value)
 		ui_mcm.exec(unpack(v.on_selection_functor),path,opt,value,v)
 	end
 	-- If the on_selection_functor attribute contains a functor, pass a copy of the same args to it
