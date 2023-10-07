@@ -4,19 +4,21 @@
 	25MAY2021
 	Anommaly Mod Configuration Menu (Anomaly MCM)
 
+------------------------------------------------------------
 	+Forked by Catspaw 05OCT2023
 		Adds new custom functors "ui_hook_functor" and "on_selection_functor", which respectively pass along UI element handlers and a trap for unsaved value changes.
 		These functors allow for dynamic customizations to MCM's UI elements at the element container level in response to user interactions
 
 	- [ui_hook_functor]
 	- Define: ( table {function, parameters} )
-	- Used by: option elements: check, list, input, track
+	- Used by: option elements: ALL (except keybind)
 	- Used by: support elements: ALL
 	- Parameters passed: wnd1, [wnd2], attrs, [flags]
 		Execute a function on initial registration of a UI element
-		wnd1 	- primary UI element (option control, image static, etc)
-		wnd2 	- secondary UI element (mainly the text fields for track and slide elements)
-		attrs	- table of attributes for the menu option
+		wnd1 	- empty static to use as an anchor for other elements
+		wnd2 	- UI element handler (context sensitive, but usually the input or content element)
+				  The specifics of what gets passed is documented in more detail with each Register function
+		attrs	- table of MCM attributes for the menu option
 		flags 	- passed along for certain element types
 		The value of the "parameters" option in the table is added to the end of the parameters list.
 
@@ -28,10 +30,15 @@
 		path 	- MCM path to changed option
 		opt 	- name of the changed option
 		value 	- value of uncommitted change
-		attrs 	- table of attributes for the menu option
+		attrs 	- table of MCM attributes for the menu option
 		The value of the "parameters" option in the table is added to the end of the parameters list.
+	
+	New callbacks:
+	mcm_option_reset sent from OnButton_Reset
+	mcm_option_restore_default sent from OnButton_Default
+	mcm_option_discard sent from On_Discard
 
-
+------------------------------------------------------------
 
 	+Modified version of the Anomaly Options menu created by Tronex. It retains all the same features.
 	+Dedicated space for mod options (As of 1_4 this includes easy save game specific options storage)
@@ -105,6 +112,7 @@
 VERSION = "1.6.5-b1"
 MCM_DEBUG = axr_main.config:r_value("mcm", "mcm/mcm_log/debug_logging2", 1, false)
 local enable_debug_prints = false
+
 ------------------------------------------------------------
 -- Strings and LTX management
 ------------------------------------------------------------
@@ -917,7 +925,7 @@ function UIMCM:Reset_opt(curr_tree, path, flags)
 				local _h = 0
 ----------- Support
 				if (v.type == "line") then
-					_h = self:Register_Line(xml, _st)
+					_h = self:Register_Line(xml, _st, v)
 		
 				elseif (v.type == "image") then
 					_h = self:Register_Image(xml, _st, v)
@@ -993,8 +1001,22 @@ function UIMCM:Register_Cap(xml, handler, id, hint)
 	return self._Cap[id]:GetHeight()
 end
 
-function UIMCM:Register_Line(xml, handler)
+function UIMCM:Register_Line(xml, handler, v)
+	-- v parameter added to support ui_hook_functor
 	local line = xml:InitStatic("elements:line",handler)
+	if v and v.ui_hook_functor then
+		-- If the ui_hook_functor attribute contains a functor, pass the UI elements to it so they can be manipulated
+		-- Test for existence first since older versions of MCM won't be passing v to this function
+		local wrapbox 	= xml:InitStatic("elements:image", handler)
+		wrapbox:SetWndSize(vector2():set(line:GetWidth(), line:GetHeight() + 10))
+		local pos 		= wrapbox:GetWndPos()
+		wrapbox:SetWndPos(vector2():set(pos.x - 10, pos.y))
+		ui_mcm.exec(unpack(v.ui_hook_functor),wrapbox,line,v)
+		--		wrapbox		:	empty static to use as an anchor for other elements
+		-- 		line 		: 	handler for the line element
+		-- 		v 			: 	table of MCM attributes for the menu option
+	end
+	
 	return (line:GetHeight() + 10)
 end
 
@@ -1011,8 +1033,18 @@ function UIMCM:Register_Image(xml, handler, v)
 		pic:InitTexture(v.link)
 		pic:SetStretchTexture(v.stretch and true or false)
 	end
-	if v.ui_hook_functor then ui_mcm.exec(unpack(v.ui_hook_functor),pic,nil,v) end
-	-- If the ui_hook_functor attribute contains a functor, pass the UI elements to it so they can be manipulated
+	if v.ui_hook_functor then
+		-- If the ui_hook_functor attribute contains a functor, pass the UI elements to it so they can be manipulated
+		local wrapbox 	= xml:InitStatic("elements:image", handler)
+		wrapbox:SetWndSize(vector2():set(pic:GetWidth(), pic:GetHeight()))
+		local pos 		= wrapbox:GetWndPos()
+		wrapbox:SetWndPos(vector2():set(pos.x - 10, pos.y))
+		ui_mcm.exec(unpack(v.ui_hook_functor),wrapbox,pic,v)
+		--		wrapbox		:	empty static to use as an anchor for other elements
+		-- 		pic 		: 	handler for the image element
+		-- 		v 			: 	table of MCM attributes for the menu option
+	end
+	
 	return pic:GetHeight()
 end
 
@@ -1043,8 +1075,17 @@ function UIMCM:Register_Slide(xml, handler, v)
 	xml:InitStatic("elements:slide:line_1", frame)
 	xml:InitStatic("elements:slide:line_2", frame)
 
-	if v.ui_hook_functor then ui_mcm.exec(unpack(v.ui_hook_functor),pic,txt,v) end
-	-- If the ui_hook_functor attribute contains a functor, pass the UI elements to it so they can be manipulated
+	if v.ui_hook_functor then
+		-- If the ui_hook_functor attribute contains a functor, pass the UI elements to it so they can be manipulated
+		local wrapbox 	= xml:InitStatic("elements:image", handler)
+		wrapbox:SetWndSize(vector2():set(pic:GetWidth(), pic:GetHeight() + 20))
+		local pos 		= wrapbox:GetWndPos()
+		wrapbox:SetWndPos(vector2():set(pos.x - 10, pos.y))
+		ui_mcm.exec(unpack(v.ui_hook_functor),wrapbox,pic,v)
+		--		wrapbox		:	empty static to use as an anchor for other elements
+		-- 		pic 		: 	handler for the image element
+		-- 		v 			: 	table of MCM attributes for the menu option
+	end
 
 	return (pic:GetHeight() + 20)
 end
@@ -1057,8 +1098,17 @@ function UIMCM:Register_Title(xml, handler, v)
 	if v.clr and v.clr[4] then
 		title:SetTextColor( GetARGB(v.clr[1], v.clr[2], v.clr[3], v.clr[4]) )
 	end
-	if v.ui_hook_functor then ui_mcm.exec(unpack(v.ui_hook_functor),title,nil,v) end
-	-- If the ui_hook_functor attribute contains a functor, pass the UI elements to it so they can be manipulated
+	if v.ui_hook_functor then
+		-- If the ui_hook_functor attribute contains a functor, pass the UI elements to it so they can be manipulated
+		local wrapbox 	= xml:InitStatic("elements:image", handler)
+		wrapbox:SetWndSize(vector2():set(title:GetWidth(), title:GetHeight()))
+		local pos 		= wrapbox:GetWndPos()
+		wrapbox:SetWndPos(vector2():set(pos.x - 10, pos.y))
+		ui_mcm.exec(unpack(v.ui_hook_functor),wrapbox,title,v)
+		--		wrapbox		:	empty static to use as an anchor for other elements
+		-- 		title 		: 	handler for the title element
+		-- 		v 			: 	table of MCM attributes for the menu option
+	end
 	return title:GetHeight()
 end
 
@@ -1070,8 +1120,19 @@ function UIMCM:Register_Desc(xml, handler, v)
 	if v.clr and v.clr[4] then
 		desc:SetTextColor( GetARGB(v.clr[1], v.clr[2], v.clr[3], v.clr[4]) )
 	end
-	if v.ui_hook_functor then ui_mcm.exec(unpack(v.ui_hook_functor),desc,nil,v) end
-	-- If the ui_hook_functor attribute contains a functor, pass the UI elements to it so they can be manipulated
+
+	if v.ui_hook_functor then
+		-- If the ui_hook_functor attribute contains a functor, pass the UI elements to it so they can be manipulated
+		local wrapbox 	= xml:InitStatic("elements:image", handler)
+		wrapbox:SetWndSize(vector2():set(desc:GetWidth(), desc:GetHeight()))
+		local pos 		= wrapbox:GetWndPos()
+		wrapbox:SetWndPos(vector2():set(pos.x - 10, pos.y))
+		ui_mcm.exec(unpack(v.ui_hook_functor),wrapbox,desc,v)
+		--		wrapbox		:	empty static to use as an anchor for other elements
+		-- 		desc 		: 	handler for the text element
+		-- 		v 			: 	table of MCM attributes for the menu option
+	end
+
 	return desc:GetHeight()
 end
 
@@ -1105,10 +1166,21 @@ function UIMCM:Register_Check(xml, handler, path, opt, v, flags)
 	end
 	self:AddCallback(id_ctrl, ui_events.BUTTON_CLICKED, _wrapper, self)
 
-	flags.path 	= path
-	flags.opt	= opt
-	if v.ui_hook_functor then ui_mcm.exec(unpack(v.ui_hook_functor),ctrl,nil,v,flags) end
-	-- If the ui_hook_functor attribute contains a functor, pass the UI elements to it so they can be manipulated
+	if v.ui_hook_functor then
+		-- If the ui_hook_functor attribute contains a functor, pass the UI elements to it so they can be manipulated
+		flags.path 		= path 			-- MCM menu path
+		flags.opt		= opt 			-- MCM option ID
+		flags.cap 		= self._Cap[id] -- handler for text caption element
+		local wrapbox 	= xml:InitStatic("elements:image", handler)
+		wrapbox:SetWndSize(vector2():set(handler:GetWidth(), h))
+		local pos 		= wrapbox:GetWndPos()
+		wrapbox:SetWndPos(vector2():set(pos.x - 10, pos.y))
+		ui_mcm.exec(unpack(v.ui_hook_functor),wrapbox,ctrl,v,flags)
+		--		wrapbox		:	empty static to use as an anchor for other elements
+		-- 		ctrl 		: 	handler for the input element
+		-- 		v 			: 	table of MCM attributes for the menu option
+		-- 		flags		: 	table of extra metadata from MCM
+	end
 	
 	return h
 end
@@ -1229,7 +1301,7 @@ function UIMCM:Register_Button(xml, handler, path, opt, v, flags)
 		self:Callback_Button(ctrl, path, opt, v)
 	end
 	self:AddCallback(id_ctrl, ui_events.BUTTON_CLICKED, _wrapper, self)
-	
+
 	return h
 end
 
@@ -1296,10 +1368,23 @@ function UIMCM:Register_List(xml, handler, path, opt, v, flags)
 	end
 	self:AddCallback(id_ctrl, ui_events.LIST_ITEM_SELECT, _wrapper, self)
 
-	flags.path 	= path
-	flags.opt	= opt
-	if v.ui_hook_functor then ui_mcm.exec(unpack(v.ui_hook_functor),ctrl,nil,v,flags) end
-	-- If the ui_hook_functor attribute contains a functor, pass the UI elements to it so they can be manipulated
+	if v.ui_hook_functor then
+		-- If the ui_hook_functor attribute contains a functor, pass the UI elements to it so they can be manipulated
+		flags.path 		= path 			-- MCM menu path
+		flags.opt		= opt 			-- MCM option ID
+		flags.cap 		= self._Cap[id] -- handler for text caption element
+		local wrapbox 	= xml:InitStatic("elements:image", handler)
+		wrapbox:SetWndSize(vector2():set(handler:GetWidth(), ctrl:GetHeight()))
+		local pos 		= wrapbox:GetWndPos()
+		wrapbox:SetWndPos(vector2():set(pos.x - 10, pos.y))
+		ui_mcm.exec(unpack(v.ui_hook_functor),wrapbox,ctrl,v,flags)
+		--		wrapbox		:	empty static to use as an anchor for other elements
+		-- 		ctrl 		: 	handler for the input element
+		-- 		v 			: 	table of MCM attributes for the menu option
+		--						use v.content to access the option list
+		-- 		flags		: 	table of extra metadata from MCM
+	end
+	
 	return h
 end
 function UIMCM:Callback_List(ctrl, path, opt, v)
@@ -1338,9 +1423,22 @@ function UIMCM:Register_Input(xml, handler, path, opt, v, flags)
 	end
 	self:AddCallback(id_ctrl, ui_events.EDIT_TEXT_COMMIT, _wrapper, self)
 
-	flags.path 	= path
-	flags.opt	= opt
-	if v.ui_hook_functor then ui_mcm.exec(unpack(v.ui_hook_functor),ctrl,nil,v,flags) end
+	if v.ui_hook_functor then
+		-- If the ui_hook_functor attribute contains a functor, pass the UI elements to it so they can be manipulated
+		flags.path 		= path 			-- MCM menu path
+		flags.opt		= opt  			-- MCM option ID
+		flags.cap 		= self._Cap[id] -- handler for text caption element
+		local wrapbox 	= xml:InitStatic("elements:image", handler)
+		wrapbox:SetWndSize(vector2():set(handler:GetWidth(), h))
+		local pos 		= wrapbox:GetWndPos()
+		wrapbox:SetWndPos(vector2():set(pos.x - 10, pos.y))
+		ui_mcm.exec(unpack(v.ui_hook_functor),wrapbox,ctrl,v,flags)
+		--		wrapbox		:	empty static to use as an anchor for other elements
+		-- 		ctrl 		: 	handler for the input element
+		-- 		v 			: 	table of MCM attributes for the menu option
+		-- 		flags		: 	table of extra metadata from MCM
+	end
+
 	return h
 end
 function UIMCM:Callback_Input(ctrl, path, opt, v)
@@ -1362,6 +1460,7 @@ function UIMCM:Callback_Input(ctrl, path, opt, v)
 	self:CacheValue(path, opt, value, v)
 	ctrl:SetText(value)
 end
+
 
 function UIMCM:Register_Track(xml, handler, path, opt, v, flags)
 	local id = cc(path , opt)
@@ -1405,10 +1504,25 @@ function UIMCM:Register_Track(xml, handler, path, opt, v, flags)
 		self._Track[id].txt:SetText(value)
 	end
 
-	flags.path 	= path
-	flags.opt	= opt
-	if v.ui_hook_functor then ui_mcm.exec(unpack(v.ui_hook_functor),self._Track[id].ctrl,self._Track[id].txt,v,flags) end
-	-- If the ui_hook_functor attribute contains a functor, pass the UI elements to it so they can be manipulated
+	if v.ui_hook_functor then
+		-- If the ui_hook_functor attribute contains a functor, pass the UI elements to it so they can be manipulated
+		flags.path 		= path 			-- MCM menu path
+		flags.opt		= opt 			-- MCM option ID
+		flags.id 		= id 			-- input handler ID
+		flags.cap 		= self._Cap[id] -- handler for text caption element
+		flags.txt 		= self._Track[id].txt 	-- handler for input value text display
+		local ctrltbl	= self._Track[id].ctrl
+		local wrapbox 	= xml:InitStatic("elements:image", handler)
+		wrapbox:SetWndSize(vector2():set(10, 10))
+		local pos 		= wrapbox:GetWndPos()
+		wrapbox:SetWndPos(vector2():set(pos.x - 10, pos.y))
+		ui_mcm.exec(unpack(v.ui_hook_functor),wrapbox,ctrltbl,v,flags)
+		--		wrapbox		:	empty static to use as an anchor for other elements
+		-- 		ctrltbl		: 	TABLE of track input elements, use ctrltbl[flags.id] to get this instance
+		-- 		v 			: 	table of MCM attributes for the menu option
+		-- 		flags		: 	table of extra metadata from MCM
+	end
+
 	return h
 end
 function UIMCM:Callback_Track(ctrl, path, opt, v, value)
@@ -1487,6 +1601,27 @@ function UIMCM:Register_Radio(xml, handler, path, opt, v, typ, flags)
 		end
 		self:AddCallback(id_ctrl .. i, ui_events.BUTTON_CLICKED, _wrapper, self)
 	end
+
+
+	if v.ui_hook_functor then
+		-- If the ui_hook_functor attribute contains a functor, pass the UI elements to it so they can be manipulated
+		flags.num_opts 	= num 	-- number of options
+		flags.hvtype 	= str 	-- "horz" or "vert"
+		flags.path 		= path 	-- MCM menu path
+		flags.opt		= opt 	-- MCM option ID
+		flags.txt 		= txt 	-- handler for the text element
+		flags.cap 		= self._Cap[id]
+		local ctrltbl	= ctrl
+		local wrapbox 	= xml:InitStatic("elements:image", handler)
+		wrapbox:SetWndSize(vector2():set(handler:GetWidth(), h))
+		local pos 		= wrapbox:GetWndPos()
+		wrapbox:SetWndPos(vector2():set(pos.x - 10, pos.y))
+		-- Can't attach anything to the track, so this wrapper is necessary
+		ui_mcm.exec(unpack(v.ui_hook_functor),wrapbox,ctrltbl,v,flags)
+		--		wrapbox		:	empty static to use as an anchor for other elements
+		-- 		ctrltbl		: 	TABLE of radio options from 1 to (flags.num)
+	end
+	-- For this type, remember that ctrl is a table of statics with num options
 
 	return h
 end
