@@ -1061,9 +1061,11 @@ function UIMCM:Register_Slide(xml, handler, v)
 	if v.text then
 		txt:SetText( game.translate_string(v.text) )
 	end
-	
-	xml:InitStatic("elements:slide:line_1", frame)
-	xml:InitStatic("elements:slide:line_2", frame)
+
+	if not v.borderless then
+		xml:InitStatic("elements:slide:line_1", frame)
+		xml:InitStatic("elements:slide:line_2", frame)
+	end
 
 	if enable_ui_functors and v.ui_hook_functor then
 		local wrapbox 	= self:Init_Wrapper_Box(xml,handler,pic:GetWidth(),pic:GetHeight() + 20,-10)
@@ -2608,7 +2610,12 @@ end
 	[spacing]
 	- Define: (number)
 	- Used by: support elements: "slide"
-		hight offset to add extra space
+		height offset to add extra space
+		
+	[borderless]
+	- Define: (boolean)
+	- Used by: support elements: "slide"
+		disables the border lines above and below the slide
 --]]
 
 ------------------------------------------------------------
