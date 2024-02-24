@@ -3,8 +3,15 @@
 	RavenAcsendant
 	25MAY2021
 	Anommaly Mod Configuration Menu (Anomaly MCM)
-				
-				
+
+------------------------------------------------------------
+	+Forked by Catspaw 05OCT2023
+	+Feature-complete 07OCT2023
+		Adds new custom functors "ui_hook_functor" and "on_selection_functor", which respectively pass along UI element handlers and a trap for unsaved value changes.
+		These functors allow for dynamic customizations to MCM's UI elements at the element container level in response to user interactions.
+		See the tutorial section on "UI Functors" for more information.
+------------------------------------------------------------
+
 	+Modified version of the Anomaly Options menu created by Tronex. It retains all the same features.
 	+Dedicated space for mod options (As of 1_4 this includes easy save game specific options storage)
 	+Dynamicly loads options  from mod scripts at main menu load
@@ -77,6 +84,8 @@
 VERSION = "1.6.5-b1"
 MCM_DEBUG = axr_main.config:r_value("mcm", "mcm/mcm_log/debug_logging2", 1, false)
 local enable_debug_prints = false
+local enable_ui_functors = true -- feature killswitch
+
 ------------------------------------------------------------
 -- Strings and LTX management
 ------------------------------------------------------------
@@ -127,7 +136,10 @@ function print_dbg(...)
 	end
 end
 
-
+function ui_functors_enabled()
+	-- for scripts to explicitly check for support 
+	return enable_ui_functors
+end
 
 ------------------------------------------------------------
 -- Options
@@ -154,8 +166,10 @@ local gathering = false
 
 if AddScriptCallback then
 	AddScriptCallback("mcm_option_change")
+	AddScriptCallback("mcm_option_reset")
+	AddScriptCallback("mcm_option_restore_default")
+	AddScriptCallback("mcm_option_discard")
 end
-
 
 function init_opt_base()
 	print_dbg("MCM options reset.")
@@ -887,7 +901,7 @@ function UIMCM:Reset_opt(curr_tree, path, flags)
 				local _h = 0
 ----------- Support
 				if (v.type == "line") then
-					_h = self:Register_Line(xml, _st)
+					_h = self:Register_Line(xml, _st, v)
 		
 				elseif (v.type == "image") then
 					_h = self:Register_Image(xml, _st, v)
@@ -955,6 +969,21 @@ end
 ------------------------------------------------------------
 -- Elements
 ------------------------------------------------------------
+
+function UIMCM:Init_Wrapper_Box(xml, anchor, w, h, posx, posy)
+	if not (xml and anchor) then return end
+	wrapbox	= xml:InitStatic("elements:image", anchor)
+	if not wrapbox then return end
+	w 		= w or anchor:GetWidth()
+	h 		= h or anchor:GetHeight()
+	posx 	= posx and (type(posx) == "number") and posx or 0
+	posy 	= posy and (type(posy) == "number") and posy or 0
+	wrapbox:SetWndSize(vector2():set(w,h))
+	pos		= wrapbox:GetWndPos()
+	wrapbox:SetWndPos(vector2():set(pos.x + posx, pos.y + posy))
+	return wrapbox
+end
+
 function UIMCM:Register_Cap(xml, handler, id, hint)
 	id = s_gsub(id, _opt_, "_")
 	self._Cap[id] = xml:InitStatic("elements:cap",handler)
@@ -963,8 +992,21 @@ function UIMCM:Register_Cap(xml, handler, id, hint)
 	return self._Cap[id]:GetHeight()
 end
 
-function UIMCM:Register_Line(xml, handler)
+function UIMCM:Register_Line(xml, handler, v)
+	-- v parameter added to support ui_hook_functor
 	local line = xml:InitStatic("elements:line",handler)
+	if enable_ui_functors and v and v.ui_hook_functor then
+		-- Test for existence first since older versions of MCM won't be passing v to this function
+		local wrapbox 	= self:Init_Wrapper_Box(xml,handler,line:GetWidth(),line:GetHeight() + 10,-10)
+		local handlers = {
+			line 		= line, 	-- handler for the line element
+		}
+		local flags = {
+			etype 		= "line",
+		}
+		ui_mcm.exec(unpack(v.ui_hook_functor),wrapbox,handlers,v,flags)
+	end
+	
 	return (line:GetHeight() + 10)
 end
 
@@ -981,6 +1023,18 @@ function UIMCM:Register_Image(xml, handler, v)
 		pic:InitTexture(v.link)
 		pic:SetStretchTexture(v.stretch and true or false)
 	end
+
+	if enable_ui_functors and v.ui_hook_functor then
+		local wrapbox 	= self:Init_Wrapper_Box(xml,handler,pic:GetWidth(),pic:GetHeight(),-10)
+		local handlers = {
+			pic 		= pic, 	-- Handler for the image element
+		}
+		local flags = {
+			etype 		= "image",
+		}
+		ui_mcm.exec(unpack(v.ui_hook_functor),wrapbox,handlers,v,flags)
+	end
+	
 	return pic:GetHeight()
 end
 
@@ -1007,10 +1061,24 @@ function UIMCM:Register_Slide(xml, handler, v)
 	if v.text then
 		txt:SetText( game.translate_string(v.text) )
 	end
-	
-	xml:InitStatic("elements:slide:line_1", frame)
-	xml:InitStatic("elements:slide:line_2", frame)
-	
+
+	if not v.borderless then
+		xml:InitStatic("elements:slide:line_1", frame)
+		xml:InitStatic("elements:slide:line_2", frame)
+	end
+
+	if enable_ui_functors and v.ui_hook_functor then
+		local wrapbox 	= self:Init_Wrapper_Box(xml,handler,pic:GetWidth(),pic:GetHeight() + 20,-10)
+		local handlers = {
+			pic 		= pic, 	-- handler for the image element
+			txt 		= txt, 	-- handler for the text element
+		}
+		local flags = {
+			etype 		= "slide",
+		}
+		ui_mcm.exec(unpack(v.ui_hook_functor),wrapbox,handlers,v,flags)
+	end
+
 	return (pic:GetHeight() + 20)
 end
 
@@ -1022,6 +1090,17 @@ function UIMCM:Register_Title(xml, handler, v)
 	if v.clr and v.clr[4] then
 		title:SetTextColor( GetARGB(v.clr[1], v.clr[2], v.clr[3], v.clr[4]) )
 	end
+	if enable_ui_functors and v.ui_hook_functor then
+		local wrapbox 	= self:Init_Wrapper_Box(xml,handler,title:GetWidth(),title:GetHeight(),-10)
+		local handlers = {
+			title 		= title, -- Handler for the title element
+		}
+		local flags = {
+			etype 		= "title",
+		}
+		ui_mcm.exec(unpack(v.ui_hook_functor),wrapbox,handlers,v,flags)
+	end
+
 	return title:GetHeight()
 end
 
@@ -1033,6 +1112,18 @@ function UIMCM:Register_Desc(xml, handler, v)
 	if v.clr and v.clr[4] then
 		desc:SetTextColor( GetARGB(v.clr[1], v.clr[2], v.clr[3], v.clr[4]) )
 	end
+
+	if enable_ui_functors and v.ui_hook_functor then
+		local wrapbox 	= self:Init_Wrapper_Box(xml,handler,desc:GetWidth(),desc:GetHeight(),-10)
+		local handlers = {
+			desc 		= desc, -- Handler for the text description element
+		}
+		local flags = {
+			etype 		= "desc",
+		}
+		ui_mcm.exec(unpack(v.ui_hook_functor),wrapbox,handlers,v,flags)
+	end
+
 	return desc:GetHeight()
 end
 
@@ -1065,6 +1156,19 @@ function UIMCM:Register_Check(xml, handler, path, opt, v, flags)
 		self:Callback_Check(ctrl, path, opt, v)
 	end
 	self:AddCallback(id_ctrl, ui_events.BUTTON_CLICKED, _wrapper, self)
+	if enable_ui_functors and v.ui_hook_functor then
+		local id_cap 	= s_gsub(id, _opt_, "_")
+		local cap 		= self._Cap[id_cap]
+		local wrapbox 	= self:Init_Wrapper_Box(xml,handler,handler:GetWidth(),h,-10)
+		local handlers = {
+			ctrl 		= ctrl, 	-- handler for the checkbox control element
+			cap 		= cap, 		-- handler for text caption element
+		}
+		flags.etype 	= "check"
+		flags.path 		= path 		-- MCM menu path
+		flags.opt		= opt 		-- MCM option ID
+		ui_mcm.exec(unpack(v.ui_hook_functor),wrapbox,handlers,v,flags)
+	end
 	
 	return h
 end
@@ -1115,7 +1219,7 @@ function UIMCM:Register_Key_Bind(xml, handler, path, opt, v, flags)
 	end
 
 	self:AddCallback(id_ctrl, ui_events.BUTTON_CLICKED, _wrapper, self)
-	
+
 	return h
 end
 
@@ -1185,7 +1289,7 @@ function UIMCM:Register_Button(xml, handler, path, opt, v, flags)
 		self:Callback_Button(ctrl, path, opt, v)
 	end
 	self:AddCallback(id_ctrl, ui_events.BUTTON_CLICKED, _wrapper, self)
-	
+
 	return h
 end
 
@@ -1251,6 +1355,20 @@ function UIMCM:Register_List(xml, handler, path, opt, v, flags)
 		self:Callback_List(ctrl, path, opt, v)
 	end
 	self:AddCallback(id_ctrl, ui_events.LIST_ITEM_SELECT, _wrapper, self)
+
+	if enable_ui_functors and v.ui_hook_functor then
+		local id_cap 	= s_gsub(id, _opt_, "_")
+		local cap 		= self._Cap[id_cap]
+		local wrapbox 	= self:Init_Wrapper_Box(xml,handler,handler:GetWidth(),ctrl:GetHeight(),-10)
+		local handlers = {
+			ctrl 		= ctrl, 	-- handler for the list control element
+			cap 		= cap, 		-- handler for text caption element
+		}
+		flags.etype 	= "list"
+		flags.path 		= path 		-- MCM menu path
+		flags.opt		= opt 		-- MCM option ID
+		ui_mcm.exec(unpack(v.ui_hook_functor),wrapbox,handlers,v,flags)
+	end
 	
 	return h
 end
@@ -1289,7 +1407,21 @@ function UIMCM:Register_Input(xml, handler, path, opt, v, flags)
 		self:Callback_Input(ctrl, path, opt, v)
 	end
 	self:AddCallback(id_ctrl, ui_events.EDIT_TEXT_COMMIT, _wrapper, self)
-	
+
+	if enable_ui_functors and v.ui_hook_functor then
+		local id_cap 	= s_gsub(id, _opt_, "_")
+		local cap 		= self._Cap[id_cap]
+		local wrapbox 	= self:Init_Wrapper_Box(xml,handler,handler:GetWidth(),h,-10)
+		local handlers = {
+			ctrl 		= ctrl, 	-- handler for the input control element
+			cap 		= cap, 		-- handler for text caption element
+		}
+		flags.etype		= "input"
+		flags.path 		= path 		-- MCM menu path
+		flags.opt		= opt 		-- MCM option ID
+		ui_mcm.exec(unpack(v.ui_hook_functor),wrapbox,handlers,v,flags)
+	end
+
 	return h
 end
 function UIMCM:Callback_Input(ctrl, path, opt, v)
@@ -1311,6 +1443,7 @@ function UIMCM:Callback_Input(ctrl, path, opt, v)
 	self:CacheValue(path, opt, value, v)
 	ctrl:SetText(value)
 end
+
 
 function UIMCM:Register_Track(xml, handler, path, opt, v, flags)
 	local id = cc(path , opt)
@@ -1353,7 +1486,24 @@ function UIMCM:Register_Track(xml, handler, path, opt, v, flags)
 	if (not v.no_str) then
 		self._Track[id].txt:SetText(value)
 	end
-	
+
+	if enable_ui_functors and v.ui_hook_functor then
+		local id_cap 	= s_gsub(id, _opt_, "_")
+		local cap 		= self._Cap[id_cap]
+		local wrapbox 	= self:Init_Wrapper_Box(xml,handler,10,10,-10)
+		local ctrl		= self._Track[id].ctrl
+		local txt 		= self._Track[id].txt
+		local handlers = {
+			ctrl		= ctrl, 	-- handler for input control
+			txt 		= txt, 		-- handler for current value display text
+			cap 		= cap, 		-- handler for text caption element
+		}
+		flags.etype		= "track"
+		flags.path 		= path  	-- MCM menu path
+		flags.opt		= opt 		-- MCM option ID
+		ui_mcm.exec(unpack(v.ui_hook_functor),wrapbox,handlers,v,flags)
+	end
+
 	return h
 end
 function UIMCM:Callback_Track(ctrl, path, opt, v, value)
@@ -1386,6 +1536,7 @@ function UIMCM:Register_Radio(xml, handler, path, opt, v, typ, flags)
 	-- Create control
 	local frame = xml:InitStatic("elements:radio_" .. str, handler)
 	local ctrl = {}
+	local txttbl = {}
 	local txt
 	local offset = typ and m_floor(frame:GetWidth()/num) or 30
 	local h_factor = typ and 1 or 0
@@ -1408,7 +1559,7 @@ function UIMCM:Register_Radio(xml, handler, path, opt, v, typ, flags)
 		local str_2 = content[i][2] or tostring(content[i][1])
 		local str = v.no_str and game.translate_string(str_2) or game.translate_string(opt_str_lst .. str_2)
 		txt:SetText( str )
-		
+		txttbl[i] = txt
 		if (h1 + h2 > h) then
 			h = h1 + h2
 		end
@@ -1432,7 +1583,26 @@ function UIMCM:Register_Radio(xml, handler, path, opt, v, typ, flags)
 		end
 		self:AddCallback(id_ctrl .. i, ui_events.BUTTON_CLICKED, _wrapper, self)
 	end
-	
+
+
+	if enable_ui_functors and v.ui_hook_functor then
+		local id_cap 	= s_gsub(id, _opt_, "_")
+		local cap 		= self._Cap[id_cap]
+		local wrapbox 	= self:Init_Wrapper_Box(xml,handler,handler:GetWidth(),h,-10)
+		local ctrltbl	= ctrl
+		local handlers = {
+			ctrltbl		= ctrltbl, 	-- TABLE of radio options from 1 to (flags.num_opts)
+			txttbl 		= txttbl, 	-- TABLE of handlers for the radio options
+			cap 		= cap, 		-- handler for text caption element
+		}
+		flags.etype 	= "radio"
+		flags.num_opts 	= num 		-- number of options
+		flags.hvtype 	= str 		-- "horz" or "vert"
+		flags.path 		= path  	-- MCM menu path
+		flags.opt		= opt 		-- MCM option ID
+		ui_mcm.exec(unpack(v.ui_hook_functor),wrapbox,ctrltbl,v,flags)
+	end
+
 	return h
 end
 function UIMCM:Callback_Radio(ctrl, path, opt, v, n)
@@ -1854,6 +2024,10 @@ function UIMCM:CacheValue(path, opt, value, v)
 	
 	-- Update state
 	self:UpdatePending()
+	if enable_ui_functors and v and v.on_selection_functor then
+		ui_mcm.exec(unpack(v.on_selection_functor),path,opt,value,v)
+	end
+	-- If the on_selection_functor attribute contains a functor, pass a copy of the same args to it
 end
 
 function UIMCM:Stacker(path, opt, v)
@@ -1909,6 +2083,8 @@ function UIMCM:OnButton_Reset()
 		if (to_reset) then
 			self:UpdatePending()
 			self:Reset_opt(self.last_curr_tree, self.last_path)
+			print_dbg("% Sent callback (mcm_option_reset)")
+			SendScriptCallback(mcm_option_reset)
 		end
 	end
 	
@@ -1918,6 +2094,8 @@ end
 function UIMCM:OnButton_Default()
 	if self.last_path and self.last_curr_tree then
 		self:Reset_opt(self.last_curr_tree, self.last_path, { def = true })
+		print_dbg("% Sent callback (mcm_option_restore_default)")
+		SendScriptCallback(mcm_option_restore_default)
 	end
 	
 
@@ -2085,6 +2263,8 @@ function UIMCM:On_Discard()
 	if (self.last_path and self.last_curr_tree) then
 		self:UpdatePending()
 		self:Reset_opt(self.last_curr_tree, self.last_path)
+		print_dbg("% Sent callback (mcm_option_discard)")
+		SendScriptCallback(mcm_option_discard)
 	end
 	self:On_Cancel()
 end
@@ -2375,8 +2555,21 @@ end
 		
 	[postcondition]
 	- Define: ( table {function, parameters} )
-	- Used by: option elements: ALL, with defined [functor]
+	- Used by: option elements: ALL, with the defined functor
 		Option won't execute its functor when changes are applied, unless if the postcondition function returns true
+
+	[ui_hook_functor]
+	- Define: ( table {function, parameters} )
+	- Used by: option elements: ALL except keybind, with the defined functor
+	- Used by: support elements: ALL
+		Passes handling elements and metadata back to the defined functor for UI customization
+		For ADVANCED scripting use only - see below
+		
+	[on_selection_functor]
+	- Define: ( table {function, parameters} )
+	- Used by option elements: ALL, with the defined functor
+		Execute a defined functor upon any live selection of a new option value
+		For ADVANCED scripting use only - see below
 
 	[curr]
 	- Define: ( table {function, parameters} )
@@ -2417,7 +2610,12 @@ end
 	[spacing]
 	- Define: (number)
 	- Used by: support elements: "slide"
-		hight offset to add extra space
+		height offset to add extra space
+		
+	[borderless]
+	- Define: (boolean)
+	- Used by: support elements: "slide"
+		disables the border lines above and below the slide
 --]]
 
 ------------------------------------------------------------
@@ -2619,3 +2817,171 @@ end
 	end
 ]]--
 
+--[[=====================================================================
+    Tutorial: UI Functors
+    *** ADVANCED SCRIPTING USE ONLY ***
+-- ======================================================================
+
+	The UI functors "ui_hook_functor" and "on_selection_functor", respectively, pass along UI element handlers and a trap for unsaved value changes. They are recommended only for advanced scripters who fully understand how to work with UI elements and want to customize their menu beyond what the template can achieve.
+	These functors allow for dynamic customizations to MCM's UI elements at the element container level in response to user interactions. They can also compeltely hose your addon's entire MCM menu with a single error.
+
+	This is not a power to be used lightly. If you use these, you are assumed to know what you're doing. Please don't bug us with how-to questions.	
+
+	- [ui_hook_functor]
+	- Define: ( table {function, parameters} )
+	- Used by: option elements: ALL (except keybind), with the defined functor
+	- Used by: support elements: ALL, with the defined functor
+
+	- Parameters passed: anchor, handlers, attrs, flags
+		Execute a function upon the initial registration of a UI element that occurs during on_mcm_load.
+		anchor 		- empty static container to use as an anchor for other elements
+		handlers	- table containing any necessary UI control handlers, varies by element type
+		attrs		- table of MCM attributes for the menu option
+		flags 		- flags.etype is always a string with the element type, other metadata varies by type
+		As with other functor attributes, the value of the "parameters" option in the table is added to the end of the parameters list.
+
+	- [on_selection_functor]
+	- Define: ( table {function, parameters} )
+	- Used by option elements: ALL, with the defined functor
+	- Parameters passed: path, opt, value, attrs
+		Execute a function on any unsaved/uncommitted change to an option value. Allows realtime response to user selections.
+		path 		- MCM path to changed option
+		opt 		- ID of the changed option
+		value 		- value of the uncommitted change
+		attrs 		- table of MCM attributes for the menu option
+		As with other functor attributes, the value of the "parameters" option in the table is added to the end of the parameters list.
+	
+	New supporting callbacks:
+	mcm_option_reset 			- 	sent from OnButton_Reset
+	mcm_option_restore_default 	- 	sent from OnButton_Default
+	mcm_option_discard 			- 	sent from On_Discard
+
+	These callbacks all fire on their respective events resulting in cancellation of pending MCM changes. This lets you clear your own table of changes or do any other necessary cleanup at the end of the MCM session.
+
+	Each menu element type has its own set of handlers and flags that are passed in these two tables. They are documented below.
+
+	In addition to those listed, all elements pass the flag "etype" containing the name of the element (in brackets below).
+
+	SUPPORT ELEMENTS
+	[line]
+		Handlers
+		- line: Static container for the line element and its texture
+
+	[image]
+		Handlers
+		- pic: Static container for the image element and its texture
+
+	[slide]
+		Handlers
+		- pic: Static container for the slide image element and its texture
+		- txt: TextWnd container for the slide label text
+
+	[title]
+		Handlers
+		- title: Static container for the title element text
+
+	[desc]
+		Handlers
+		- desc: Static container for the description element text
+
+	OPTION ELEMENTS
+	All Option elements pass the following Flags:
+		- path: MCM menu path to the option
+		- opt: MCM ID for the option
+
+	[check]
+		Handlers
+		- cap: Static container for the localized text caption
+		- ctrl: Static container for the checkbox input control
+
+	[list]
+		Handlers
+		- cap: Static container for the localized text caption
+		- ctrl: Static container for the dropdown list input control
+
+	[input]
+		Handlers
+		- cap: Static container for the localized text caption
+		- ctrl: Static container for the input box control
+
+	[track]
+		Handlers
+		- cap: Static container for the localized text caption
+		- ctrl: Static container for the track input control
+
+	[radio]
+		Handlers
+		- cap: Static container for the localized text caption
+		- txt: Table of TextWnd containers for the radio options
+		- ctrltbl: Table of radio button input controls
+		Flags
+		- num_opts: the number of radio button options in the above tables
+		- hvtype: string "horz" or "vert" denoting layout style
+
+-- ======================================================================
+    Tutorial: UI Functors: Example:
+-- ======================================================================
+	You should be very familiar with how to work with UI containers in Anomaly before going any further.
+
+	This is a very simple example of how to use the UI functors. Assume this script is saved as element_test_mcm.script.
+
+	1. MCM calls do_ui_hook_functor for each of the menu elements that have it defined: a slide and a checkbox
+
+	2. do_ui_hook_functor creates a new empty static anchored on the image element to contain the icon texture, stores the handlers for it and the slide text, and changes the caption text for the checkbox
+
+	3. once during init, and each time the user clicks the checkbox, the icon and slide text will change in response
+
+-- ====================================================================]]
+
+--[[
+	function on_mcm_load()
+		op = {id= "ui_functor_test", sh=true, gr={
+				{id = "img_container", type= "slide",
+					ui_hook_functor= {element_test_mcm.do_ui_hook_functor}},
+
+				{id = "checkbox", type= "check", val = 1, def = true, hint = "",
+					ui_hook_functor= {element_test_mcm.do_ui_hook_functor}, 
+					on_selection_functor= {element_test_mcm.do_on_selection_functor}},
+				}
+			}
+		return op
+	end
+
+	xml = CScriptXmlInit()
+	xml:ParseFile("ui_mcm.xml")
+	local wnd,txt
+
+	function do_on_selection_functor(path, opt, value, attrs)
+		-- This function is called every time the user makes a selection or change
+		-- We also call it manually below, once during init, to set the default texture
+		if not (wnd and txt) then return end
+		local primary = value and true or false
+		if primary then
+			wnd:InitTexture("ui_inGame2_PDA_icon_Primary_mission")
+			txt:SetText("Primary Mission icon")
+		else
+			wnd:InitTexture("ui_inGame2_PDA_icon_Secondary_mission")
+			txt:SetText("Secondary Mission icon")
+		end
+	end
+
+	function do_ui_hook_functor(anchor, handlers, attrs, flags)
+		-- This function should do any first-time setup for each menu option
+		if not (anchor and handlers and flags) then return end
+		local etype = flags and flags.etype
+		if etype == "slide" then
+			wnd = xml:InitStatic("elements:image",anchor)
+			wnd:SetWndSize(vector2():set(24,28))
+			local pos = wnd:GetWndPos()
+			wnd:SetWndPos(vector2():set(pos.x, pos.y + 28))
+			txt = handlers.txt
+			local curr_state = ui_mcm.get("ui_functor_test/checkbox")
+			do_on_selection_functor(nil,nil,curr_state)
+		elseif etype == "check" then
+			local newtext = "Click the checkbox to toggle the icon type"
+			local cap = handlers.cap
+			cap:TextControl():SetText(newtext)
+		end
+	end
+
+--]]
