@@ -34,3 +34,16 @@ Change History:
 			special handeling for key wrappers in the keybinds list
 			fixed a bug in dph-hcl's script for save game specific MCM options (HarukaSai)
 	1.6.6	Actually updated mcm_log to 1.0.2 fixing a crash on quit.
+
+	1.7.0 	Update to Anomaly 1.5.3 Earlier versions of anomaly will not be supported due to the stalker games EULA changes.
+			Included support for Catspaw's ui hooks
+				Adds new custom functors "ui_hook_functor" and "on_selection_functor", which respectively pass along UI element handlers and a trap for unsaved value changes.
+				These functors allow for dynamic customizations to MCM's UI elements at the element container level in response to user interactions.
+				See the tutorial section on "UI Functors" for more information.
+			Fixed a typo "dispaly_key" changed to "display_key", legacy name aliased for compatablity.
+			MCM  get(id) will no longer read values from axr_options for settings that are not part of the curent options table
+				lacking a defined value type the data returned was always a string, orphaned settings values are also likely to be garbage
+				nil will be returned instead, you need to handel this.
+				Mostly this was an issue when addon A was reading addon B's settings and addon B had been uninstalled
+				these values will still exist in axr_options and can be read directly if needed.
+			Due to degree of code chnages steps have been taken to invalidate any monkey patches of the MCM UI class.

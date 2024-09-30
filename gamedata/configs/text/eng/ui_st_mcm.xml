@@ -102,10 +102,10 @@
 	<string id="ui_mcm_mcm_mcm_kb_mcm_kb_main_presstime_desc">
 		<text>Multiplier applied to Double tap window to determine How long a key needs to be held down to count as a long press or hold. Only applies to addons that use MCM to identify long key presses.</text>
 	</string>
-	<string id="ui_mcm_mcm_mcm_kb_mcm_kb_main_dtaptime1">
+	<string id="ui_mcm_mcm_mcm_kb_mcm_kb_main_dtaptime2">
 		<text>Double tap window.</text>
 	</string>
-	<string id="ui_mcm_mcm_mcm_kb_mcm_kb_main_dtaptime1_desc">
+	<string id="ui_mcm_mcm_mcm_kb_mcm_kb_main_dtaptime2_desc">
 		<text>How soon a second press of a key needs to follow a first to count as a double tap of the key. Only applies to addons that use MCM to identify double key presses. This time can affect the input delay of some single key press events and should thereby be set as small as possible.</text>
 	</string>
 
