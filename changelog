@@ -55,3 +55,13 @@ Change History:
 			Added function open_to(path) that can go directly from the game to a particular MCM setting.
 			Added get_gui() a function that will return the mcm gui object if MCM is open. DO NOT save this fetch fresh when needed, or you may endup playing with a dead ui.
 			Updated mcm_log to 1.0.3 fixing another crash on close.
+			
+	1.7.2	Improved Russian translation curtesy of Frir (frirgoru moddb)
+			Resized MCM banner to improve readablity (Frir) 
+			Improved mcm_key_localization.ltx (Frir)
+			Seperated key eligiblity from the display_key function, display_key now returns names for all mouse buttons, escape and capslocks which it did not previusly do.
+			Text in all but the left most menu may now be colored. see mcm_kb_conflicts below 
+			The following changes required modifying the MCM ui and will likely break mods that reskin MCM
+			Addon list (left most navigation menu) is now searchable.
+			Longer text in the navigation menu now wraps properly.
+				In the left most menu the length is capped and a tool tip displayed with the full text

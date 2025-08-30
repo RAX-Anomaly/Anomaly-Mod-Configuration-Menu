@@ -177,7 +177,13 @@
 		<text>Long Press.</text>
 	</string>
 	
+	<string id="ui_mcm_menu_search">
+		<text>Search...</text>
+	</string>
 
+	<string id="ui_mcm_menu_search_clear">
+		<text>Rightclick to clear.</text>
+	</string>
 
 
 
