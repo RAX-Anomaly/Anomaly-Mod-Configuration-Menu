@@ -104,6 +104,13 @@ function main_menu:Update()
 			self.msg_wnd:Show(false)
 		end
 	end
+	
+	if self.auto_mcm and time_continual() - self.auto_mcm > 100 then
+		self:OnButton_mcm_clicked()
+		self.mcm_dlg:Open_to(self.auto_mcm_path)
+		self.auto_mcm = nil
+		self.auto_mcm_path = nil
+	end
 end 
 
 function main_menu:Show(f)

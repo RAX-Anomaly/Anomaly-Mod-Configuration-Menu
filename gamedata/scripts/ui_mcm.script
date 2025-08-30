@@ -60,8 +60,14 @@
 					Mostly this was an issue when addon A was reading addon B's settings and addon B had been uninstalled
 					these values will still exist in axr_options and can be read directly if needed.
 				Due to degree of code chnages steps have been taken to invalidate any monkey patches of the MCM UI.
-					
-					
+		
+		1.7.1	Fixed the callbacks for the UI hooks not being sent.
+				Improved how modifier key state is tracked.
+				Added an option to force addon names to english to improve sorting when some addon names lack russian translation.
+				Added Demonized preset widget for all to use.
+				Added function open_to(path) that can go directly from the game to a particular MCM setting.
+				Added get_gui() a function that will return the mcm gui object if MCM is open. DO NOT save this fetch fresh when needed, or you may endup playing with a dead ui.
+				updated mcm_log to 1.0.3 fixing another crash on close.
 
 				
 				
@@ -89,7 +95,7 @@
 	
 --]]
 
-VERSION = "1.7.0"
+VERSION = "1.7.1"
 MCM_DEBUG = axr_main.config:r_value("mcm", "mcm/mcm_log/debug_logging2", 1, false)
 local enable_debug_prints = false
 local enable_ui_functors = true -- feature killswitch
@@ -97,15 +103,16 @@ local enable_ui_functors = true -- feature killswitch
 ------------------------------------------------------------
 -- Strings and LTX management
 ------------------------------------------------------------
-local ini_pres	   = ini_file("presets\\includes.ltx")
-local ini_loc 	   = ini_file_ex("localization.ltx")
-local ini_mcm_key  = ini_file_ex("mcm_key_localization.ltx")
-local _opt_        = "/"                 -- For axr_options.ltx, don't touch!
-local opt_section  = "mcm"           -- For axr_options.ltx, don't touch!
-local opt_str      = "ui_mcm_"			 -- Option name: "ui_mcm_(option ID)" -- Option description: "ui_mcm_(option ID)_desc"
-local opt_str_menu = "ui_mcm_menu_"		 -- Option menu: "ui_mcm_menu_(option menu ID)"
-local opt_str_prst = "ui_mcm_prst_"       -- Option preset: "ui_mcm_prst_(option preset ID)"
-local opt_str_lst  = "ui_mcm_lst_"		 -- List/Radio keys: "ui_mcm_lst_(key)"
+local ini_pres	   		= ini_file("presets\\includes.ltx")
+local ini_loc 	   		= ini_file_ex("localization.ltx")
+local ini_mcm_key  		= ini_file_ex("mcm_key_localization.ltx")
+local _opt_        		= "/"                 -- For axr_options.ltx, don't touch!
+local opt_section  		= "mcm"           -- For axr_options.ltx, don't touch!
+local opt_str      		= "ui_mcm_"			 -- Option name: "ui_mcm_(option ID)" -- Option description: "ui_mcm_(option ID)_desc"
+local opt_str_menu 		= "ui_mcm_menu_"		 -- Option menu: "ui_mcm_menu_(option menu ID)"
+local opt_str_prst 		= "ui_mcm_prst_"       -- Option preset: "ui_mcm_prst_(option preset ID)"
+local opt_str_lst  		= "ui_mcm_lst_"		 -- List/Radio keys: "ui_mcm_lst_(key)"
+local opt_str_lst_in	= "_lst_"            -- new infix replacement for above. 
 function cc(path,opt) return (path .. _opt_ .. opt) end
 
 ------------------------------------------------------------
@@ -156,18 +163,19 @@ options = {}
 local opt_temp     = {} -- stores pending changes
 local opt_backup   = {} -- do a backup of original changes for comparison with pendings
 local opt_index    = {} -- option index by path, so we can locate an option fast without iterating throw the whole options table
+local tr_index    = {} -- tree index by path, so we can locate an tree fast without iterating throw the whole options table
 local opt_val      = {} -- option value type by path, to execute proper functions on different type without iterating throw the whole options table
 local allowed_type = { -- ignore tables from these types in temp tables
 	["check"] = true,  
-	["list"] = true,  
+	["list"] = true,
+	["preset"] = true,	
 	["input"] = true,  
 	["radio_h"] = true,  
 	["radio_v"] = true,  
 	["track"] = true,
-	["key_bind"] = true,
-
-	
+	["key_bind"] = true,	
 }
+
 local key_by_path = {}
 local paths_by_key = {}
 local gathering = false
@@ -188,7 +196,7 @@ function init_opt_base()
 					{ id= "slide_mcm"		 	   ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_menu_mcm_about"		,size= {512,50}		},
 					{ id= "desc_mcm"    	 	,type= "desc"     ,text= "ui_mcm_desc_mcm"			 ,clr= {255,125,175,200}	},
 					{ id= "desc_mcm2"    	 	,type= "desc"     ,text= "ui_mcm_desc_mcm2"			 ,clr= {255,125,175,200}	},
-					--{ id="reset"	              ,type= "check"    ,val= 1	,def= false 	    , functor = {reload }  },
+					{ id="dxml"	              ,type= "check"    ,val= 1	,def= false 	    , precondition = {function() return dxml_core end}  },
 				},},
 				{id = "mcm_kb",  gr={
 					{id = "mcm_kb_main",  sh=true    ,gr={
@@ -287,18 +295,22 @@ function init_opt_coder(kb_meta)
 	-- Level 1
 	for i=1,#options do
 		id_1 = options[i].id
+		tr_index[id_1] = i
 		if options[i].sh then
 			code_option(options[i].gr, id_1, i)
 		else
+			
 			-- Level 2
 			for ii=1,#options[i].gr do
 				id_2 = options[i].gr[ii].id
+				tr_index[id_1 .._opt_.. id_2] = i .._opt_.. ii
 				if options[i].gr[ii].sh then
 					code_option( (options[i].gr[ii].gr), (id_1 .._opt_.. id_2), (i .._opt_.. ii) )
 				else
 					-- Level 3
 					for iii=1,#options[i].gr[ii].gr do
 						id_3 = options[i].gr[ii].gr[iii].id
+						tr_index[id_1 .._opt_.. id_2 .._opt_.. id_3] = i .._opt_.. ii .._opt_.. iii
 						if options[i].gr[ii].gr[iii].sh then
 							code_option( (options[i].gr[ii].gr[iii].gr), (id_1 .._opt_.. id_2 .._opt_.. id_3), (i .._opt_.. ii .._opt_.. iii) )
 						else
@@ -530,6 +542,7 @@ MOD_SHIFT = false
 MOD_ALT = false
 
 function get_mod_key(val)
+	update_modifier_key_states()
 	if val == 1 then
 		return MOD_SHIFT
 	elseif val == 2 then
@@ -542,31 +555,18 @@ end
 
 function on_key_release(key)
 	hold[key] = nil
-	if key == DIK_keys.DIK_RCONTROL or key == DIK_keys.DIK_LCONTROL then
-		MOD_CTRL = false
-	elseif key == DIK_keys.DIK_RSHIFT or key == DIK_keys.DIK_LSHIFT then
-		MOD_SHIFT = false
-	elseif key == DIK_keys.DIK_RMENU or key == DIK_keys.DIK_LMENU then
-		MOD_ALT = false
-	elseif key == DIK_keys.DIK_ESCAPE then
-		MOD_CTRL = false
-		MOD_SHIFT = false
-		MOD_ALT = false
-	end
-	MOD_NONE = not(MOD_CTRL or MOD_SHIFT or MOD_ALT)
-	
+	update_modifier_key_states()
 end
 function on_key_press(key)
-	if key == DIK_keys.DIK_RCONTROL or key == DIK_keys.DIK_LCONTROL then
-		MOD_CTRL = true
-	elseif key == DIK_keys.DIK_RSHIFT or key == DIK_keys.DIK_LSHIFT then
-		MOD_SHIFT = true
-	elseif key == DIK_keys.DIK_RMENU or key == DIK_keys.DIK_LMENU then
-		MOD_ALT = true
+	update_modifier_key_states()
+end
+function update_modifier_key_states()
+	MOD_SHIFT 	= (key_state(DIK_keys.DIK_RSHIFT) or 0) ~= 0 	or (key_state(DIK_keys.DIK_LSHIFT) or 0) ~= 0 --in case key_sate is fixed to return bool
+	MOD_CTRL 	= (key_state(DIK_keys.DIK_RCONTROL) or 0) ~= 0 	or (key_state(DIK_keys.DIK_LCONTROL) or 0) ~= 0
+	MOD_ALT 	= (key_state(DIK_keys.DIK_RMENU) or 0) ~= 0 	or (key_state(DIK_keys.DIK_LMENU) or 0) ~= 0
 
-	end
 	MOD_NONE = not(MOD_CTRL or MOD_SHIFT or MOD_ALT)
-	
+
 end
 
 
@@ -591,6 +591,18 @@ function str_opt_explode(id, by_num)
 	end
 	return t
 end
+
+function str_tr_explode(id, by_num)
+	local nums = by_num and tr_index[id] or id
+	local t = nums and str_explode(nums, _opt_) or {}
+	if by_num then
+		for i=1,#t do
+			t[i] = tonumber(t[i])
+		end
+	end
+	return t
+end
+
 function get_opt_table(id)
 	local t = str_opt_explode(id, true)
 	if #t == 0 then
@@ -643,6 +655,29 @@ end
 function is_gathering()
 	return gathering
 end
+
+
+function open_to(path)
+	if is_not_empty(_GUIs) then
+		printe("!MCM open_to cannot be called while gui is open")
+		return
+	end
+	local function main_menu_on_init(mm)
+		mm.auto_mcm = time_continual()
+		mm.auto_mcm_path = path
+		UnregisterScriptCallback("main_menu_on_init", main_menu_on_init)
+	end
+	RegisterScriptCallback("main_menu_on_init", main_menu_on_init)
+	level.press_action(bind_to_dik(key_bindings.kQUIT))
+	level.release_action(bind_to_dik(key_bindings.kQUIT))
+	
+end
+
+function get_gui()
+	if GUI then return GUI end
+	printe("!MCM get_gui called when GUI closed.")
+end
+
 --------------------
 function get(id)
 	assert(not gathering, "ui_mcm.get() cannot be called during script load or on_mcm_load()!")
@@ -652,7 +687,7 @@ function get(id)
 	end
 	
 	if not opt_val[id] then
-		printe("MCM given bad path:%s",id)
+		printe("!MCM given bad path:%s",id)
 		return
 	end
 
@@ -709,10 +744,11 @@ end
 --//////////////////////// OPTIONS //////////////////////////
 --===========================================================
 UIMCM = {} --old monkey patch black hole
-
+local GUI
 class "UI_MCM" (CUIScriptWnd)
 
 function UI_MCM:__init() super()
+	
 	self.last_tree = {}
 	self.last_path = nil
 	self.last_curr_tree = nil
@@ -811,7 +847,7 @@ end
 
 function UI_MCM:Update()
 	CUIScriptWnd.Update(self)
-
+	
 	-- Show hint on hover
 	for id,ctrl in pairs(self._Cap) do
 		if ctrl:IsCursorOverWindow() then
@@ -943,6 +979,9 @@ function UI_MCM:Reset_opt(curr_tree, path, flags)
 					
 				elseif (v.type == "list") then
 					_h = self:Register_List(xml, _st, path, opt, v, flags)
+					
+				elseif (v.type == "preset") then
+					_h = self:Register_Preset_New(xml, _st, path, opt, v, flags)
 				
 				elseif (v.type == "input") then
 					_h = self:Register_Input(xml, _st, path, opt, v, flags)
@@ -975,14 +1014,39 @@ end
 
 function UI_MCM:Reset_last_opt()
 	Register_UI("UI_MCM")
-	
-	if self.last_curr_tree and self.last_path then
-		if self.last_path == "mcm/mcm_kb/mcm_conflicts" then
-			self.last_curr_tree = options[1].gr[2].gr[3]
-		end
-		self:Reset_opt(self.last_curr_tree, self.last_path)
+	if  self.last_path then
+		self:Open_to(self.last_path)
 		self:UpdatePending()
 	end
+end
+
+function UI_MCM:Open_to(path)
+	
+	GUI = self
+	if not path then return end
+	local nums = str_opt_explode(path, true)
+
+	if #nums == 0  then
+		nums = str_tr_explode(path, true)
+	end
+	if #nums == 0  then
+		return
+	end
+	local path_segs = str_opt_explode(path)
+	path = path_segs[1]
+	self:Callback_Tree(1, path, options[nums[1]], self.bl[1][""], nums[1])
+	if #nums == 1 or   options[nums[1]].sh then
+		return
+	end
+	local last_path = path
+	path = cc(path, path_segs[2])
+	self:Callback_Tree(2, path, options[nums[1]].gr[nums[2]], self.bl[2][last_path], nums[2])
+	if #nums == 2 or   options[nums[1]].gr[nums[2]].sh then
+		return
+	end
+	last_path = path
+	path = cc(path, path_segs[3])
+	self:Callback_Tree(3, path, options[nums[1]].gr[nums[2]].gr[nums[3]], self.bl[3][last_path], nums[3])
 end
 
 ------------------------------------------------------------
@@ -1007,6 +1071,7 @@ function UI_MCM:Register_Cap(xml, handler, id, hint)
 	id = s_gsub(id, _opt_, "_")
 	self._Cap[id] = xml:InitStatic("elements:cap",handler)
 	self._Cap[id]:TextControl():SetText( game.translate_string(opt_str .. (hint or id)) )
+
 	self._Hint[id] = hint
 	return self._Cap[id]:GetHeight()
 end
@@ -1348,11 +1413,12 @@ function UI_MCM:Register_List(xml, handler, path, opt, v, flags)
 	local idx
 	local value = self:GetValue(path, opt, v, flags)
 	local content = self:GetContent(path, opt, v)
+	local opt_string = s_gsub(id, _opt_, "_")..opt_str_lst_in
 	
 	-- Setup
 	for i=1,#content do 
 		local str_2 = content[i][2] or tostring(content[i][1])
-		local str = v.no_str and str_2 or game.translate_string(opt_str_lst .. str_2)
+		local str = v.no_str and str_2 or (not has_translation(opt_string..str_2)) and has_translation(opt_str_lst .. str_2) and opt_str_lst .. str_2 or opt_string..str_2
 		ctrl:AddItem( game.translate_string(str), i)
 		
 		if content[i][1] == value then
@@ -1362,7 +1428,7 @@ function UI_MCM:Register_List(xml, handler, path, opt, v, flags)
 	idx = idx or 1
 	--printf(path.." ".. idx)
 	local str_2 = content[idx][2] or tostring(content[idx][1])
-	local str = v.no_str and str_2 or game.translate_string(opt_str_lst .. str_2)
+	local str = v.no_str and str_2 or (not has_translation(opt_string..str_2)) and has_translation(opt_str_lst .. str_2) and opt_str_lst .. str_2 or opt_string..str_2
 	ctrl:enable_id( idx )
 	ctrl:SetText( game.translate_string(str) )
 	
@@ -1396,6 +1462,114 @@ function UI_MCM:Callback_List(ctrl, path, opt, v)
 	local content = self:GetContent(path, opt, v)
 	self:CacheValue(path, opt, content[i][1], v)
 end
+
+
+function UI_MCM:Register_Preset_New(xml, handler, path, opt, v, flags)
+	local id = cc(path , opt)
+	v.clr = v.clr or {255,225, 170, 60}
+	-- Caption
+	local h = self:Register_Cap(xml, handler,  id, v.hint)
+	
+	-- Apply to all button
+	if flags.apply_to_all and flags.group then
+		self:Register_BtnAll(xml, handler, path, opt, v, flags)
+	end
+	
+	-- Create control
+	local ctrl = xml:InitComboBox("elements:list",handler)
+	if (ctrl:GetHeight() > h) then
+		--h = ctrl:GetHeight()
+	end
+	
+	-- Get values
+	local idx
+	local value = self:GetValue(path, opt, v, flags)
+	local content = self:GetContent(path, opt, v)
+	local opt_string = s_gsub(id, _opt_, "_")..opt_str_lst_in
+	-- Setup
+	for i=1,#content do 
+		local str_2 = content[i][2] or tostring(content[i][1])
+		local str = v.no_str and str_2 or (not has_translation(opt_string..str_2)) and has_translation(opt_str_lst .. str_2) and opt_str_lst .. str_2 or opt_string..str_2
+		ctrl:AddItem( game.translate_string(str), i)
+		
+		if content[i][1] == value then
+			idx = i
+		end
+	end
+	idx = idx or 1
+	--printf(path.." ".. idx)
+	local str_2 = content[idx][2] or tostring(content[idx][1])
+	local str = v.no_str and str_2 or (not has_translation(opt_string..str_2)) and has_translation(opt_str_lst .. str_2) and opt_str_lst .. str_2 or opt_string..str_2
+	ctrl:enable_id( idx )
+	ctrl:SetText( game.translate_string(str) )
+	
+	-- Register
+	local id_ctrl = self:Stacker(path, opt, v)
+	
+	self:Register(ctrl, id_ctrl)
+	local _wrapper = function(handler) -- we need wrapper in order to pass ctrl to method
+		self:Callback_Preset_New(ctrl, path, opt, v)
+	end
+	self:AddCallback(id_ctrl, ui_events.LIST_ITEM_SELECT, _wrapper, self)
+
+	if enable_ui_functors and v.ui_hook_functor then
+		local id_cap 	= s_gsub(id, _opt_, "_")
+		local cap 		= self._Cap[id_cap]
+		local wrapbox 	= self:Init_Wrapper_Box(xml,handler,handler:GetWidth(),ctrl:GetHeight(),-10)
+		local handlers = {
+			ctrl 		= ctrl, 	-- handler for the list control element
+			cap 		= cap, 		-- handler for text caption element
+		}
+		flags.etype 	= "preset"
+		flags.path 		= path 		-- MCM menu path
+		flags.opt		= opt 		-- MCM option ID
+		ui_mcm.exec(unpack(v.ui_hook_functor),wrapbox,handlers,v,flags)
+	end
+	
+	return h
+end
+function UI_MCM:Callback_Preset_New(ctrl, path, opt, v)
+	local i = ctrl:CurrentID()
+	local content = self:GetContent(path, opt, v)
+	self:CacheValue(path, opt, content[i][1], v)
+	local pres = content[i][1]
+	if not (v.presets and v.presets[pres] and type(v.presets[pres]) == "table") then
+	        printf("%s preset %s not found or is not table", cc(path , opt), pres)
+        return
+    end
+	for option, value in pairs(v.presets[pres]) do
+		local v = get_opt_table(cc(path, option))
+		if v and v.type then
+			--hidden options may have functors that can't run under conditions where they are hidden, skip
+			local to_hide = v.precondition and (not exec(unpack(v.precondition)))
+			if (not to_hide) then
+				-- Get proper value
+				if v.val == 0 then
+					
+				elseif v.val == 1 then
+					value = (value == "true" or value and type(value) == "boolean") and true or false
+				elseif v.val == 2 then
+					value = tonumber(value)
+				end
+				
+				-- Cache changes
+				printf("%s preset %s cached to %s", cc(path , option), pres, value)
+				self:CacheValue(path, option, value, v)
+			else
+				printf("%s preset %s hidden skipping", cc(path , option), pres)
+			end
+		else
+			printf("%s preset %s not valid", cc(path , option), pres)
+		end
+	end
+	-- Update XML elements
+	self:Reset_opt(self.last_curr_tree, self.last_path)
+	
+	-- Update state
+	self:UpdatePending()
+
+end
+
 
 function UI_MCM:Register_Input(xml, handler, path, opt, v, flags)
 	local id = cc(path , opt)
@@ -1562,6 +1736,7 @@ function UI_MCM:Register_Radio(xml, handler, path, opt, v, typ, flags)
 	local v_factor = typ and 0 or 1
 	local h1, h2 = 0, 0
 	--printf("offset: %s - h_factor: %s - v_factor: %s - num: %s", offset, h_factor, v_factor, num)
+	local opt_string = s_gsub(id, _opt_, "_")..opt_str_lst_in
 	for i=1,num do 
 	
 		-- Buttons
@@ -1576,8 +1751,8 @@ function UI_MCM:Register_Radio(xml, handler, path, opt, v, typ, flags)
 		h2 = h_factor * txt:GetHeight()
 		txt:SetWndPos(vector2():set( pos2.x + ((i-1) * offset * h_factor) , pos2.y - (v_factor * 30) + ((i-1) * offset * v_factor) ))
 		local str_2 = content[i][2] or tostring(content[i][1])
-		local str = v.no_str and game.translate_string(str_2) or game.translate_string(opt_str_lst .. str_2)
-		txt:SetText( str )
+		local str = v.no_str and str_2 or (not has_translation(opt_string..str_2)) and has_translation(opt_str_lst .. str_2) and opt_str_lst .. str_2 or opt_string..str_2
+		txt:SetText( game.translate_string(str) )
 		txttbl[i] = txt
 		if (h1 + h2 > h) then
 			h = h1 + h2
@@ -1837,7 +2012,7 @@ function UI_MCM:Callback_Tree(tr, path, group, ctrl, i)
 	-- Radio buttons behavior
 	if (ctrl[i]:GetCheck() == false) then
 		ctrl[i]:SetCheck(true)
-		return
+		--return
 	end
 	for k=1,#ctrl do
 		if k ~= i then
@@ -1855,7 +2030,6 @@ function UI_MCM:Callback_Tree(tr, path, group, ctrl, i)
 	-- If its an option list, show it
 	if group.sh then
 		self:Reset_opt(group, path)
-		
 		-- Caching current options
 		self.last_path = path
 		if (not self.last_curr_tree) then
@@ -2103,7 +2277,7 @@ function UI_MCM:OnButton_Reset()
 			self:UpdatePending()
 			self:Reset_opt(self.last_curr_tree, self.last_path)
 			print_dbg("% Sent callback (mcm_option_reset)")
-			SendScriptCallback(mcm_option_reset)
+			SendScriptCallback("mcm_option_reset")
 		end
 	end
 	
@@ -2114,7 +2288,7 @@ function UI_MCM:OnButton_Default()
 	if self.last_path and self.last_curr_tree then
 		self:Reset_opt(self.last_curr_tree, self.last_path, { def = true })
 		print_dbg("% Sent callback (mcm_option_restore_default)")
-		SendScriptCallback(mcm_option_restore_default)
+		SendScriptCallback("mcm_option_restore_default")
 	end
 	
 
@@ -2273,7 +2447,7 @@ function UI_MCM:On_Cancel()
 	self.Need_Restart = false
 	self.Save_CFG = false
 
-	
+	GUI = false
 	Unregister_UI("UI_MCM")
 end
 
@@ -2283,7 +2457,7 @@ function UI_MCM:On_Discard()
 		self:UpdatePending()
 		self:Reset_opt(self.last_curr_tree, self.last_path)
 		print_dbg("% Sent callback (mcm_option_discard)")
-		SendScriptCallback(mcm_option_discard)
+		SendScriptCallback("mcm_option_discard")
 	end
 	self:On_Cancel()
 end
@@ -2463,6 +2637,7 @@ end
 		- Option elements:
 				"check"        	: Option, check box, either ON or OFF
 				"list"         	: Option, list of strings, useful for options with too many selections
+				"preset"        : Option, identical to a list except selecting it can change the selections of other options on the same page
 				"input"        	: Option, input box, you can type a value of your choice
 				"radio_h"   	: Option, radio box, select one out of many choices. Can fit up to 8 selections (Horizental layout)
 				"radio_v"   	: Option, radio box, select one out of many choices. Can fit up any number of selections (Vertical layout)
@@ -2519,16 +2694,39 @@ end
 		
 	[content]
 	- Define: ( table {double pairs} ) / ( table {function, parameters} )
-	- Used by: option elements: "list" / "radio_h" / "radio_v":
+	- Used by: option elements: "list" / "preset" / "radio_h" / "radio_v":
 		Delcares option's selection list
 		Pairs: { value of the selection, string to show on UI }
 			Example: content= { {0,"off"} , {1,"half"} , {2,"full"}}
-			So the list or radio option will show 3 selections (translated strings): (ui_mcm_lst_off) and (ui_mcm_lst_half) and (ui_mcm_lst_full)
+			So the list or radio option will show 3 selections (translated strings): (ui_mcm_[tree_1]_[tree_2]_[tree_...]_[option]_lst_off) and (ui_mcm_[tree_1]_[tree_2]_[tree_...]_[option]_lst_half) and (ui_mcm_[tree_1]_[tree_2]_[tree_...]_[option]_lst_full)
 			When you select one and it get applied, the assosiated value will get applied
 			So picking the first one will pass ( 0 )
-		Because all lists and radio button elements share the same prefix, "ui_mcm_lst_" it is important that you not use common words like
-			the ones in the example above. Make your element names unique.
-		
+				
+	[presets]
+	- Define:  ( table {value of content, {option = preset_value}} )
+	- Used by: option elements: "preset":
+		- For each value in content a list of opotion IDs **at the same level** and values to set them To
+		- Example for above [content] example as presets for the options damage, health, armor
+				presets = 	{
+							[0] = {--off
+									damage = 0,
+									health = 0,
+									armor = 0,
+								},
+							[1] = {--half
+									damage = 0.5,
+									health = 0.5,
+									armor = 0.5,
+								},
+							[2] = {--full
+									damage = 1,
+									health = 1,
+									armor = 1,
+								},
+							}
+		- if you use [val] = 0  and string values for your content the presets table indicies will be strings not numbers and easier to read
+		- It is recomended that this table not be defined inline with the options table. 
+	
 	[link]
 	- Define: (string)
 	- Used by: support elements: "image" / "slide"
@@ -2552,8 +2750,8 @@ end
 	[no_str]
 	- Define: (boolean)
 	- Used by: option elements: "list" / "radio_h" / "radio_v" / "track"
-		Usually, the 2nd key of pairs in content table are strings to show on the UI, by translating "opt_str_lst_(string)"
-		when we set [no_str] to true, it will show the string fromm table as it is without translations or "opt_str_lst_"
+		Usually, the 2nd key of pairs in content table are strings to show on the UI, by translating "ui_mcm_[tree_1]_[tree_2]_[tree_...]_[option]_lst_(string)"
+		when we set [no_str] to true, it will show the string from table as it is without "ui_mcm_..." or "opt_str_lst_"
 		For TrackBars: no_str won't show value next to the slider
 		
 	[prec]

@@ -22,12 +22,12 @@
 	<string id="ui_mcm_menu_mcm_about">
 		<text>Обо</text>
 	</string>
-	<string id="ui_mcm_mcm_mcm_about_reset">
-		<text>Обновить все меню</text>
+	<string id="ui_mcm_mcm_mcm_about_dxml">
+		<text>Принудительные английские названия аддонов.</text>
 	</string>
-	<string id="ui_mcm_mcm_mcm_about_reset_desc">
-		<text>Проверка этого и нажатие кнопки «Применить» заставит MCM перезагрузить все меню. Это инструмент для отладки, который в обычном режиме не нужен. </text>
-		</string>
+	<string id="ui_mcm_mcm_mcm_about_dxml_desc">
+		<text>Принудительно переводит названия дополнений на английский язык для улучшения сортировки, поскольку некоторые дополнения имеют только английские названия. Требуется перезапуск игры.</text>
+	</string>
 
 
 	<string id="ui_mcm_menu_mcm_log">

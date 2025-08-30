@@ -32,6 +32,7 @@ changelog
 1.0.0 inital
 1.0.1 removed unused ltx, corected callback.
 1.0.2 adding error handeling to more file operations
+1.0.3 prevented atempts to log while the game is quiting, stoping a crash.
 
 --]]
 
@@ -178,6 +179,7 @@ function close_logs()
 	if not fsgameupdated then return end
 	for fname,file in pairs(files) do
 		pcall(function() file:close() end )
+		files[fname] = nil
 		local f	= getFS()
 		local flist = f:file_list_open_ex("$mcmlogs$",bit_or(FS.FS_ListFiles,FS.FS_RootOnly),fname.."*")
 		local f_cnt = flist:Size()
