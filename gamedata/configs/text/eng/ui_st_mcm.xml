@@ -22,11 +22,11 @@
 	<string id="ui_mcm_menu_mcm_about">
 		<text>About</text>
 	</string>
-	<string id="ui_mcm_mcm_mcm_about_reset">
-		<text>Reload all menus</text>
+	<string id="ui_mcm_mcm_mcm_about_dxml">
+		<text>Forced English names for addons.</text>
 	</string>
-	<string id="ui_mcm_mcm_mcm_about_reset_desc">
-		<text>Checking this and hitting apply will cause MCM to reload all menus. This is a debugging tool and shouldn't be necessary in the normal course of things.</text>
+	<string id="ui_mcm_mcm_mcm_about_dxml_desc">
+		<text>This setting doesn't do anything when the language isn't set to russian.</text>
 	</string>
 
 

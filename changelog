@@ -1,11 +1,11 @@
 Change History:
-	1_1 added options table passed by referance
-	1_2 Fixed a crash that is actualy still part of ui_options
-	1_3 Added overide controls for option tree/branch text see the tutorial section "Parameters of option Tree" at the end of this sctipt
+	1_1 added options table passed by reference
+	1_2 Fixed a crash that is actually still part of ui_options
+	1_3 Added override controls for option tree/branch text see the tutorial section "Parameters of option Tree" at the end of this sctipt
 	1_4 Integrated dph-hcl's script for save game specific MCM options. See "Tutorial: Using : dph-hcl's script for save game specific MCM options"
 	1_5 Pass value to functors
 	1.6.0 	Adopted https://semver.org/spec/v1.0.0.html versioning spec for reasons.
-			Far left list sorted alphabeticaly, except MCM will always be at the top to serve as a landing page.
+			Far left list sorted alphabetically, except MCM will always be at the top to serve as a landing page.
 			Added logging utility see instruction in mcm_log.script
 			Now pass true to on_options_change callback to make it posible to identify when it is coming from mcm
 			MCM tracks a session ID that only increments when game exe is launched. ui_mcm.get_session_id()
@@ -17,12 +17,12 @@ Change History:
 				Tracking of held status of shift controls and alt keys with single functon to read all three and a no modifier state
 				Functions to help identify single, double and long presses of a key.
 				Provided templated mcm option tables for selecting modifier keys and single/double and long presses that include translation strings.
-			Updated documentation at end of this sctipt for all keybind related features.
+			Updated documentation at end of this script for all keybind related features.
 	1.6.1 	Fixed xrdebug 1040 crash.
 	1.6.2 	Added a message for when io.open fails to create a file. 
 			Made ui_mcm.script not fail if mcm_log.script is missing.
-			Made debug logging default to false as orginaly intended.
-	1.6.3	Fixed interferance between doubletap and single press when bonund to same key.
+			Made debug logging default to false as originally intended.
+	1.6.3	Fixed interference between doubletap and single press when bound to same key.
 	1.6.4	Missed one place in above fix.
 	1.6.5	Added support for unbound MCM keybinds
 			pressing ESC while binding a key will unbind the key, clicking will still cancel the bind process
@@ -30,8 +30,8 @@ Change History:
 			unbound keys will not be reported as conflicting
 			added mouse4-8 as valid keybinds.
 			updated mcm_log to 1.0.2 fixing a crash on quit.
-			chnaged the doubletap window to be 200ms. down from 500. this will make mcm keybinds feel more responsive. made it adjustable by increments of 5
-			special handeling for key wrappers in the keybinds list
+			changed the doubletap window to be 200ms. down from 500. this will make mcm keybinds feel more responsive. made it adjustable by increments of 5
+			special handling for key wrappers in the keybinds list
 			fixed a bug in dph-hcl's script for save game specific MCM options (HarukaSai)
 	1.6.6	Actually updated mcm_log to 1.0.2 fixing a crash on quit.
 
@@ -40,10 +40,18 @@ Change History:
 				Adds new custom functors "ui_hook_functor" and "on_selection_functor", which respectively pass along UI element handlers and a trap for unsaved value changes.
 				These functors allow for dynamic customizations to MCM's UI elements at the element container level in response to user interactions.
 				See the tutorial section on "UI Functors" for more information.
-			Fixed a typo "dispaly_key" changed to "display_key", legacy name aliased for compatablity.
-			MCM  get(id) will no longer read values from axr_options for settings that are not part of the curent options table
+			Fixed a typo "dispaly_key" changed to "display_key", legacy name aliased for compatibility.
+			MCM  get(id) will no longer read values from axr_options for settings that are not part of the current options table
 				lacking a defined value type the data returned was always a string, orphaned settings values are also likely to be garbage
-				nil will be returned instead, you need to handel this.
+				nil will be returned instead, you need to handle this.
 				Mostly this was an issue when addon A was reading addon B's settings and addon B had been uninstalled
 				these values will still exist in axr_options and can be read directly if needed.
-			Due to degree of code chnages steps have been taken to invalidate any monkey patches of the MCM UI class.
+			Due to degree of code changes steps have been taken to invalidate any monkey patches of the MCM UI class.
+		
+	1.7.1	Fixed the callbacks for the UI hooks not being sent.
+			Improved how modifier key state is tracked.
+			Added an option to force addon names to English to improve sorting when some addon names lack Russian translation.
+			Added Demonized preset widget for all to use.
+			Added function open_to(path) that can go directly from the game to a particular MCM setting.
+			Added get_gui() a function that will return the mcm gui object if MCM is open. DO NOT save this fetch fresh when needed, or you may endup playing with a dead ui.
+			Updated mcm_log to 1.0.3 fixing another crash on close.

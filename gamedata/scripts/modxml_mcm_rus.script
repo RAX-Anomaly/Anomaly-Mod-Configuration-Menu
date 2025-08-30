@@ -1,0 +1,16 @@
+function on_xml_read()
+	local enabled = axr_main.config:r_value("mcm", "mcm/mcm_about/dxml", 1, false)
+    if not enabled then return end
+	RegisterScriptCallback("on_xml_read", function(xml_file_name, xml_obj)
+        if xml_file_name:find([[text\rus]]) and xml_file_name ~= [[text\rus\_color_code.xml]] and xml_file_name ~= [[text\rus\st_items_fieldcraft.xml]]
+        then
+            local res = xml_obj:query("string")
+            for _, el in ipairs(res) do
+                local elAttr = xml_obj:getElementAttr(el)
+                if elAttr.id and elAttr.id:find("ui_mcm_menu") then
+                    xml_obj:removeElement(el)
+                end
+            end
+        end
+    end)
+end
