@@ -68,6 +68,18 @@
 				Added function open_to(path) that can go directly from the game to a particular MCM setting.
 				Added get_gui() a function that will return the mcm gui object if MCM is open. DO NOT save this fetch fresh when needed, or you may endup playing with a dead ui.
 				updated mcm_log to 1.0.3 fixing another crash on close.
+				
+		1.7.2	Improved Russian translation curtesy of Frir (frirgoru moddb)
+				Resized MCM banner to improve readablity (Frir) 
+				Improved mcm_key_localization.ltx (Frir)
+				Seperated key eligiblity from the display_key function, display_key now returns names for all mouse buttons, escape and capslocks which it did not previusly do.
+				Text in all but the left most menu may now be colored. see mcm_kb_conflicts below 
+				The following changes required modifying the MCM ui and will likely break mods that reskin MCM
+				Addon list (left most navigation menu) is now searchable.
+				Longer text in the navigation menu now wraps properly.
+					In the left most menu the length is capped and a tool tip displayed with the full text
+				
+				
 
 				
 				
@@ -97,7 +109,7 @@
 
 VERSION = "1.7.1"
 MCM_DEBUG = axr_main.config:r_value("mcm", "mcm/mcm_log/debug_logging2", 1, false)
-local enable_debug_prints = false
+local enable_debug_prints = true
 local enable_ui_functors = true -- feature killswitch
 
 ------------------------------------------------------------
@@ -179,7 +191,7 @@ local allowed_type = { -- ignore tables from these types in temp tables
 local key_by_path = {}
 local paths_by_key = {}
 local gathering = false
-
+local mod_name_length = 40
 
 AddScriptCallback("mcm_option_change")
 AddScriptCallback("mcm_option_reset")
@@ -191,16 +203,16 @@ function init_opt_base()
 	print_dbg("MCM options reset.")
 	get_session_id()
 	options = {
-		{ 	id= "mcm"        , gr={
+		{ 	id= "mcm"        ,clr = {255, 225, 0, 0}, gr={
 				{id = "mcm_about", sh=true    , gr={
-					{ id= "slide_mcm"		 	   ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_menu_mcm_about"		,size= {512,50}		},
+					{ id= "slide_mcm"		 	   ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_menu_mcm_about"		,size= {444,43}		},
 					{ id= "desc_mcm"    	 	,type= "desc"     ,text= "ui_mcm_desc_mcm"			 ,clr= {255,125,175,200}	},
 					{ id= "desc_mcm2"    	 	,type= "desc"     ,text= "ui_mcm_desc_mcm2"			 ,clr= {255,125,175,200}	},
 					{ id="dxml"	              ,type= "check"    ,val= 1	,def= false 	    , precondition = {function() return dxml_core end}  },
 				},},
 				{id = "mcm_kb",  gr={
 					{id = "mcm_kb_main",  sh=true    ,gr={
-						{ id= "slide_kb"		 	   ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_menu_mcm_kb"		,size= {512,50}		},
+						{ id= "slide_kb"		 	   ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_menu_mcm_kb"		,size= {444,43}		},
 						{ id= "desc_kb"    	 	,type= "desc"     ,text= "ui_mcm_mcm_desc_kb"			 ,clr= {255,125,175,200}	},
 						{ id= "desc_kb2"    	 	,type= "desc"     ,text= "ui_mcm_mcm_desc_kb2"			 ,clr= {255,125,175,200}	},
 						{id = "dtaptime2", type = "track", val = 2, def = 200, min = 100, max = 750, step = 5},
@@ -208,12 +220,12 @@ function init_opt_base()
 
 					},},
 					{id = "mcm_all_kb", sh=true    , gr={
-						{ id= "slide_kb"		 	   ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_menu_mcm_all_kb"		,size= {512,50}		},
+						{ id= "slide_kb"		 	   ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_menu_mcm_all_kb"		,size= {444,43}		},
 						{ id= "desc_kb"    	 	,type= "desc"     ,text= "ui_mcm_mcm_desc_kb_all"			 ,clr= {255,125,175,200}	},
 						{ id= "desc_kb2"    	 	,type= "desc"     ,text= "ui_mcm_mcm_desc_kb_all2"			 ,clr= {255,125,175,200}	},
 					},},
-					{id = "mcm_kb_conflicts", sh=true    , gr={
-						{ id= "slide_kb"		 	   ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_menu_mcm_kb_conflicts"		,size= {512,50}		},
+					{id = "mcm_kb_conflicts", sh=true    , clr = {255, 225, 0, 0}, gr={
+						{ id= "slide_kb"		 	   ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_menu_mcm_kb_conflicts"		,size= {444,43}		},
 						{ id= "desc_kb"    	 	,type= "desc"     ,text= "ui_mcm_mcm_desc_kb_conflicts"			 ,clr= {255,125,175,200}	},
 						{ id= "desc_kb2"    	 	,type= "desc"     ,text= "ui_mcm_mcm_desc_kb_all2"			 ,clr= {255,125,175,200}	},
 					},},
@@ -221,7 +233,7 @@ function init_opt_base()
 					
 				},},
 				{id = "mcm_log", sh=true    , gr={
-					{ id= "slide_log"		 	   ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_menu_mcm_log"		,size= {512,50}		},
+					{ id= "slide_log"		 	   ,type= "slide"	  ,link= "AMCM_Banner.dds"	 ,text= "ui_mcm_menu_mcm_log"		,size= {444,43}		},
 					{ id= "desc_log"    	 	,type= "desc"     ,text= "ui_mcm_mcm_desc_log"			 ,clr= {255,125,175,200}	},
 					{id = "enable", type = "check", val = 1, def = true},
 					{id = "numlogs", type = "track", val = 2, def = 2, min = 1, max = 10, step = 1},
@@ -462,6 +474,16 @@ function get_conflict(path, key)
 	print_dbg("=/= kbp:%s %s, k:%s %s",type(key_by_path[path]), key_by_path[path], k, type(k))
 	return paths_by_key[k] and (paths_by_key[k].conflict or paths_by_key[k].conflict == false) --limited support for pending changes conflicts.
 end
+
+local blockedkeys ={ --standard keys that are blocked for varius reasons. 
+		[1] = "esc", -- unbind key, cannot be bound to anything.
+		[58] = "cap lock", --honestly don't know how this works with the toggle so blocking 
+		[337] = "mouse1", -- binding to the 3 main mouse buttons is asking for trouble. 
+		[338] = "mouse2",
+		[339] = "mouse3"
+	}
+		
+
 
 function display_key(key)
 	local loc = ini_loc:r_value("string_table","language")
@@ -806,9 +828,16 @@ function UI_MCM:InitControls()
 	--xml:InitFrame("main:notify_frame", self.dialog)
 	self.pending = xml:InitTextWnd("main:notify", self.dialog)
 	
+	-- Mod search
+	self.mod_search =  xml:InitEditBox("main:search",self.dialog)
+	self.mod_search:SetText(game.translate_string("ui_mcm_menu_search"))
+	self:Register(self.mod_search, "mod_search")
+	self.search_filter = nil
+
 	-- Options lists
 	self.tree = {}
 	self.bl = {}
+	self.tmp_grp = {}
 	
 	-- Options showcase
 	self.scroll_opt = xml:InitScrollView("main:scroll", self.dialog)
@@ -838,6 +867,9 @@ function UI_MCM:InitCallBacks()
 	self:AddCallback("btn_reset", ui_events.BUTTON_CLICKED, self.OnButton_Reset, self)
 	self:AddCallback("btn_default", ui_events.BUTTON_CLICKED, self.OnButton_Default, self)
 	self:AddCallback("btn_cancel", ui_events.BUTTON_CLICKED, self.OnButton_Cancel, self)
+
+	self:AddCallback("mod_search", ui_events.EDIT_TEXT_COMMIT, self.OnSearch, self)
+
 	
 	self:AddCallback("preset", ui_events.LIST_ITEM_SELECT, self.Callback_Preset, self)
 	
@@ -859,7 +891,22 @@ function UI_MCM:Update()
 			return
 		end
 	end
-	
+	--Hint for long mod names
+	for i,ctrl in pairs(self.bl[1][""]) do
+		if ctrl:IsCursorOverWindow() then
+			local str = game.translate_string(self.tmp_grp[1][""][i].text or opt_str_menu .. self.tmp_grp[1][""][i].id)
+			if (#str > mod_name_length + 3) then
+				self.hint_wnd:Update(str)
+				return
+			end
+		end
+	end
+	if self.mod_search:IsCursorOverWindow() then
+		local str = game.translate_string("ui_mcm_menu_search_clear")
+		self.hint_wnd:Update(str)
+		return
+	end
+		
 	self.hint_wnd:Update()
 	
 	-- Hack to simulate tracing method for TrackBar value changes. TODO: add callback support for CUITrackBar in engine, this is just silly
@@ -1021,8 +1068,10 @@ function UI_MCM:Reset_last_opt()
 end
 
 function UI_MCM:Open_to(path)
-	
+	self.search_filter = nil
+	self.mod_search:SetText(game.translate_string("ui_mcm_menu_search"))
 	GUI = self
+	self:Register_Tree(1, "", options, 1)
 	if not path then return end
 	local nums = str_opt_explode(path, true)
 
@@ -1955,7 +2004,11 @@ function UI_MCM:Register_Tree(tr, path, group, idx)
 	if (not self.tree[tr]) then
 		self.tree[tr] = {}
 	end
-
+	if tr == 1 and self.tree[tr][path] then
+		self.tree[tr][path]:Show(false)
+		self.tree[tr][path] = nil
+	end
+	
 	if (not self.tree[tr][path]) then
 		self.tree[tr][path] = xml:InitScrollView("main:tree_" .. tr, self.dialog)
 		
@@ -1967,35 +2020,68 @@ function UI_MCM:Register_Tree(tr, path, group, idx)
 		
 		if (not self.bl[tr]) then
 			self.bl[tr] = {}
+			self.tmp_grp[tr] = {}
 		end
 		
 		self.bl[tr][path] = {}
-		
+		self.tmp_grp[tr][path] = {}
 		-- Fill tree
+		local btn_idx = 0
 		for i=1,#group do
-			local _st = xml:InitStatic("main:st_tree", nil)
-			
-			self.bl[tr][path][i] = xml:InitCheck("elements:btn_list", _st)
-			self.bl[tr][path][i]:SetCheck(false)
-			
-			local txt = xml:InitTextWnd("elements:txt_list", _st)
-			txt:SetText( game.translate_string(group[i].text or opt_str_menu .. group[i].id) )
-			txt:SetTextColor( clr_tree[tr] )
-			
-			self.tree[tr][path]:AddWindow(_st, true)
-			_st:SetAutoDelete(false)
-		end
-		
-		-- Set Callback for tree buttons
-		for i=1,#self.bl[tr][path] do
-			local path_i = (path ~= "") and cc(path , group[i].id) or group[i].id
-			
-			self:Register(self.bl[tr][path][i], ("tree_"..path_i))
-			local _wrapper = function(handler) -- we need wrapper in order to pass ctrl to method
-				self:Callback_Tree(tr, path_i, group[i], self.bl[tr][path], i)
+			local str =  game.translate_string(group[i].text or opt_str_menu .. group[i].id)
+			if not (tr == 1 and i > 1 and self.search_filter and not string.find(string.lower(str), string.lower(self.search_filter))) then
+				local _st = xml:InitStatic("main:st_tree", nil)
+
+				btn_idx = btn_idx+1	
+				self.tmp_grp[tr][path][btn_idx] = group[i]
+				self.bl[tr][path][btn_idx] = xml:InitCheck("elements:btn_list", _st)
+				self.bl[tr][path][btn_idx]:SetCheck(false)
+				
+				local txt = xml:InitTextWnd("elements:txt_list", _st)
+				if tr == 1 and #str > mod_name_length + 3 then
+					str = string.sub(str, 1, mod_name_length) .. "..."
+				end
+				txt:SetText( str )
+				local oldheight = txt:GetHeight()
+				txt:AdjustHeightToText()
+				local newheight = txt:GetHeight()
+				local change = newheight>oldheight
+				newheight = change and (newheight + 6) or oldheight
+				if change then
+					local pos = txt:GetWndPos()
+					pos.y = pos.y + 1
+					txt:SetWndPos(pos)
+				end
+				txt:SetWndSize(vector2():set(txt:GetWidth(), newheight))
+				_st:SetWndSize(vector2():set(_st:GetWidth(), newheight))
+				self.bl[tr][path][btn_idx]:SetWndSize(vector2():set(self.bl[tr][path][btn_idx]:GetWidth(), newheight))
+				--_st:SetStretchTexture(true)
+				--_st:InitTexture("ui_checkbox_TabLED")
+				
+				
+				txt:SetTextColor( tr ~= 1 and group[i].clr and GetARGB(group[i].clr[1], group[i].clr[2], group[i].clr[3], group[i].clr[4]) or  clr_tree[tr] )
+				
+				self.tree[tr][path]:AddWindow(_st, true)
+				_st:SetAutoDelete(false)
+				
+				
+					
 			end
-			self:AddCallback(("tree_"..path_i), ui_events.BUTTON_CLICKED, _wrapper, self)
 		end
+		print_dbg("-size:%s", #self.bl[tr][path])
+		for i=1,#self.bl[tr][path] do
+			local path_i = (path ~= "") and cc(path , self.tmp_grp[tr][path][i].id) or self.tmp_grp[tr][path][i].id
+			
+			self:Register(self.bl[tr][path][i], ("tree_"..path_i..(tr == 1 and self.search_filter or "" )))
+			print_dbg("-make Callback_Tree | tr: %s - path: %s - index: %s", tr, path, i)
+			local _wrapper = function(handler) -- we need wrapper in order to pass ctrl to method
+				print_dbg("-wrapper Callback_Tree | tr: %s - path: %s - index: %s", tr, path, i)
+				self:Callback_Tree(tr, path_i, self.tmp_grp[tr][path][i], self.bl[tr][path], i)
+			end
+			self:AddCallback(("tree_"..path_i..(tr == 1 and self.search_filter or "" )), ui_events.BUTTON_CLICKED, _wrapper, self)
+		end
+
+
 	end
 	
 	self.tree[tr][path]:Show(true)
@@ -2462,6 +2548,18 @@ function UI_MCM:On_Discard()
 	self:On_Cancel()
 end
 
+
+function UI_MCM:OnSearch()
+	local value = self.mod_search:GetText()
+	if not value or value == "" then
+		self.search_filter = nil
+		self.mod_search:SetText(game.translate_string("ui_mcm_menu_search"))
+	end
+	self.search_filter = value
+	self:Register_Tree(1, "", options, 1)
+end
+
+
 function UI_MCM:OnKeyboard(dik, keyboard_action)
 	local res = CUIScriptWnd.OnKeyboard(self,dik,keyboard_action)
 	if (res == false) then
@@ -2474,8 +2572,16 @@ function UI_MCM:OnKeyboard(dik, keyboard_action)
 				else
 					self:OnButton_Cancel()
 				end
-			elseif self.k_binder and display_key(dik) then
+			elseif self.k_binder and display_key(dik) and not blockedkeys[dik] then
 				self.k_binder(dik)
+			end
+		end
+		if keyboard_action == ui_events.WINDOW_KEY_RELEASED then
+			if dik == DIK_keys.MOUSE_2 then
+				if self.mod_search:IsCursorOverWindow() then
+					self.mod_search:SetText("")
+					self.mod_search:CaptureFocus(true)
+				end
 			end
 		end
 	end
@@ -2591,6 +2697,10 @@ end
 	- [text]
 	- Define: (string)
 		To over ride the display text for the tree in the tree select
+		
+	- [clr]
+		- Define: ( table {a,r,b,g} )
+		- Used to color the text, ignored at the root (addon list) level
 		
 	- [precondition]
 	- Define: ( table {function, parameters} )

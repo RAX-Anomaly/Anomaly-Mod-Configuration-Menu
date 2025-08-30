@@ -1,8 +1,13 @@
-;If MCM keybinds displays a key diferent than what you entered, find the key that MCM displayed and change it to what you actually pressed.
-;A bunch of keys that are not part of the standard US keyboard layout have been disabled by putting ; at the beggingin of thier line, if your keyboard supports them delete the ; to renenable
+;  MCM_KEY_LOCALIZATION.LTX  - definitions of key names shown in the MCM keybind boxes
+;=========================================================
+
+; ---[EN] ----------------------------------------------------------------------------------------------------
+; If MCM keybinds displays a key different than what you entered, find the key that MCM displayed and change it to what you actually pressed.
+; A bunch of keys that are not part of the standard US keyboard layout have been disabled by putting ; at the beginnin of their lines, if your keyboard supports them delete the ; to reenable.  The key line syntax is:  KEYCODE  =  KEYNAME
 [eng]
 -1 = UNBOUND
-11 = 0
+
+;---numeric---
 2 = 1
 3 = 2
 4 = 3
@@ -12,38 +17,108 @@
 8 = 7
 9 = 8
 10 = 9
+11 = 0
+
+;---alphabetical---
 30 = A
-78 = ADD
-40 = APOSTROPHE
-;221 = APPS
-;145 = AT
-;150 = AX
 48 = B
-14 = BACK
-43 = BACKSLASH
 46 = C
-;58 = CAPITAL
-;144 = CIRCUMFLEX
-146 = COLON
-51 = COMMA
-;121 = CONVERT
 32 = D
-83 = DECIMAL
-211 = DELETE
-181 = DIVIDE
-208 = DOWN
 18 = E
-207 = END
-13 = EQUALS
-;1 = ESCAPE ; mcm kebinds cannot use this key. donot renenable.
 33 = F
+34 = G
+35 = H
+23 = I
+36 = J
+37 = K
+38 = L
+50 = M
+49 = N
+24 = O
+25 = P
+16 = Q
+19 = R
+31 = S
+20 = T
+22 = U
+47 = V
+17 = W
+45 = X
+21 = Y
+44 = Z
+
+;---symbols---
+26 = [
+27 = ]
+39 = ;
+40 = '
+41 = `
+43 = \
+51 = ,
+52 = .
+53 = /
+12 = -
+13 = =
+
+;---special---
+1 = Esc              
+58 = Caps Lock      
+15 = Tab
+14 = Backspace
+28 = Enter
+57 = Spacebar
+
+219 = Left Win
+220 = Right Win
+221 = Menu                 ; context menu key
+
+;---modifiers---
+42 = Left Shift
+29 = Left Ctrl 
+56 =Left Alt
+54 = Right Shift
+157 = Right Ctrl
+184 = Right Alt
+
+;---arrow keypad--- 
+203 = Left Arrow
+205 = Right Arrow
+200 = Up Arrow
+208 = Down Arrow
+
+210 = Ins
+211 = Del
+199 = Home
+207 = End
+201 = PgUp
+209 = PgDn
+
+183 = SysRq (PrtSc)
+70 = Scroll Lock
+197 = Pause
+
+;---numeric keypad--- 
+69 = Num Lock
+181 = Num /
+55 = Num *
+74 = Num -
+78 = Num +
+83 = Num .
+156 = Num Enter
+
+82 = Num 0
+79 = Num 1
+80 = Num 2
+81 = Num 3
+75 = Num 4
+76 = Num 5
+77 = Num 6
+71 = Num 7
+72 = Num 8
+73 = Num 9
+
+;---functional--- 
 59 = F1
-68 = F10
-87 = F11
-88 = F12
-100 = F13
-101 = F14
-102 = F15
 60 = F2
 61 = F3
 62 = F4
@@ -52,85 +127,51 @@
 65 = F7
 66 = F8
 67 = F9
-34 = G
-41 = GRAVE
-35 = H
-199 = HOME
-23 = I
-210 = INSERT
-36 = J
-37 = K
-;112 = KANA
-;148 = KANJI
-38 = L
-26 = LBRACKET
-29 = LCONTROL
-203 = LEFT
-56 = LALT;LMENU
-42 = LSHIFT
-;219 = LWIN
-50 = M
-12 = MINUS
-55 = MULTIPLY
-49 = N
-;209 = NEXT
-;123 = NOCONVERT
-69 = NUMLOCK
-82 = NUMPAD0
-79 = NUMPAD1
-80 = NUMPAD2
-81 = NUMPAD3
-75 = NUMPAD4
-76 = NUMPAD5
-77 = NUMPAD6
-71 = NUMPAD7
-72 = NUMPAD8
-73 = NUMPAD9
-179 = NUMPADCOMMA
-156 = NUMPADENTER
-141 = NUMPADEQUALS
-24 = O
-25 = P
-197 = PAUSE
-52 = PERIOD
-;201 = PRIOR
-16 = Q
-19 = R
-27 = RBRACKET
-157 = RCONTROL
-28 = RETURN
-205 = RIGHT
-184 = RALT;RMENU
-54 = RSHIFT
-;220 = RWIN
-31 = S
-70 = SCROLL
-39 = SEMICOLON
-53 = SLASH
-57 = SPACE
-;149 = STOP
-74 = SUBTRACT
-;183 = SYSRQ
-20 = T
-15 = TAB
-22 = U
-;147 = UNDERLINE
-;151 = UNLABELED
-200 = UP
-47 = V
-17 = W
-45 = X
-21 = Y
-;125 = YEN
-44 = Z
-340 = MOUSE4
-341 = MOUSE5
-343 = MOUSE6
-343 = MOUSE7
-344 = MOUSE8
+68 = F10
+87 = F11
+88 = F12
+100 = F13
+101 = F14
+102 = F15
+
+;---mouse buttons---
+337 = Mouse 1
+338 = Mouse 2
+339 = Mouse 3
+340 = Mouse 4
+341 = Mouse 5
+343 = Mouse 6
+343 = Mouse 7
+344 = Mouse 8
+
+
+;---unused and missing in standard US keyboard layout---
+
+
+;150 = AX		              ; Japanese layout
+;144 = Circumflex (^)          ; Japanese layout
+;121 = Convert		     ; Japanese layout
+;112 = Kana		              ; Japanese layout
+;148 = Kanji 		              ; Japanese layout
+;123 = NoConvert		     ; Japanese layout
+;125 = Yen                             ; Japanese layout
+
+;145 = @                                ; NEC PC98 (2000)
+;146 = :                                 ; NEC PC98
+;179 = Num ,                         ; NEC PC98
+;141 = Num =                       ; NEC PC98
+;149 = Stop	                      ; NEC PC98 
+;147 = Underline                  ; NEC PC98
+;151 = Unlabeled                  ; Toshiba J-3100 (1989)
+
+
+; ---[RU] -----------------------------------------------------------------------
+; Если при назначении клавиш в MCM выводится название клавиши, не соответствующее нажатой, найдите ниже это ошибочное название и измените его на правильное.
+; Большинство клавиш, которые не входят в стандартную русскую раскладку (RU), отключены посредством символа ";" в начале соответствующей строки. Если на вашей клавиатуре есть такие клавиши, удалите ";" для их задействования.  Синтаксис строк назначения названий клавиш: КОД = НАЗВАНИЕ
 [rus]
--1 = UNBOUND
-11 = 0
+-1 = НЕ НАЗНАЧЕНО
+
+;---цифры---
 2 = 1
 3 = 2
 4 = 3
@@ -140,38 +181,108 @@
 8 = 7
 9 = 8
 10 = 9
+11 = 0
+
+;---буквы---
 30 = A
-78 = ADD
-40 = APOSTROPHE
-;221 = APPS
-;145 = AT
-;150 = AX
 48 = B
-14 = BACK
-43 = BACKSLASH
 46 = C
-;58 = CAPITAL
-;144 = CIRCUMFLEX
-146 = COLON
-51 = COMMA
-;121 = CONVERT
 32 = D
-83 = DECIMAL
-211 = DELETE
-181 = DIVIDE
-208 = DOWN
 18 = E
-207 = END
-13 = EQUALS
-1 = ESCAPE
 33 = F
+34 = G
+35 = H
+23 = I
+36 = J
+37 = K
+38 = L
+50 = M
+49 = N
+24 = O
+25 = P
+16 = Q
+19 = R
+31 = S
+20 = T
+22 = U
+47 = V
+17 = W
+45 = X
+21 = Y
+44 = Z
+
+;---знаки---
+26 = [
+27 = ]
+39 = ;
+40 = '
+41 = `
+43 = \
+51 = ,
+52 = .
+53 = /
+12 = -
+13 = =
+
+;---служебные---
+1 = Esc                    
+58 = Caps Lock      
+15 = Tab
+14 = Backspace
+28 = Enter
+57 = Пробел
+
+219 = Левый Win
+220 = Правый Win
+221 = Меню                 ; клавиша контекстного меню
+
+;---модификаторы---
+42 = Левый Shift
+29 = Левый Ctrl 
+56 = Левый Alt	
+54 = Правый Shift
+157 = Правый Ctrl
+184 = Правый Alt
+
+;---"стрелочный" блок--- 
+203 = Cтрелка влево
+205 = Стрелка вправо
+200 = Стрелка вверх
+208 = Cтрелка вниз
+
+210 = Ins
+211 = Del
+199 = Home
+207 = End
+201 = PgUp
+209 = PgDn
+
+183 = SysRq (PrtSc)
+70 = Scroll Lock
+197 = Pause
+
+;---цифровой блок--- 
+69 = Num Lock
+181 = Num /
+55 = Num *
+74 = Num -
+78 = Num +
+83 = Num .
+156 = Num Enter
+
+82 = Num 0
+79 = Num 1
+80 = Num 2
+81 = Num 3
+75 = Num 4
+76 = Num 5
+77 = Num 6
+71 = Num 7
+72 = Num 8
+73 = Num 9
+
+;---функциональные--- 
 59 = F1
-68 = F10
-87 = F11
-88 = F12
-100 = F13
-101 = F14
-102 = F15
 60 = F2
 61 = F3
 62 = F4
@@ -180,79 +291,39 @@
 65 = F7
 66 = F8
 67 = F9
-34 = G
-41 = GRAVE
-35 = H
-199 = HOME
-23 = I
-210 = INSERT
-36 = J
-37 = K
-;112 = KANA
-;148 = KANJI
-38 = L
-26 = LBRACKET
-29 = LCONTROL
-203 = LEFT
-56 = LMENU
-42 = LSHIFT
-;219 = LWIN
-50 = M
-12 = MINUS
-55 = MULTIPLY
-49 = N
-;209 = NEXT
-;123 = NOCONVERT
-69 = NUMLOCK
-82 = NUMPAD0
-79 = NUMPAD1
-80 = NUMPAD2
-81 = NUMPAD3
-75 = NUMPAD4
-76 = NUMPAD5
-77 = NUMPAD6
-71 = NUMPAD7
-72 = NUMPAD8
-73 = NUMPAD9
-179 = NUMPADCOMMA
-156 = NUMPADENTER
-141 = NUMPADEQUALS
-24 = O
-25 = P
-197 = PAUSE
-52 = PERIOD
-;201 = PRIOR
-16 = Q
-19 = R
-27 = RBRACKET
-157 = RCONTROL
-28 = RETURN
-205 = RIGHT
-184 = RMENU
-54 = RSHIFT
-;220 = RWIN
-31 = S
-70 = SCROLL
-39 = SEMICOLON
-53 = SLASH
-57 = SPACE
-;149 = STOP
-74 = SUBTRACT
-;183 = SYSRQ
-20 = T
-15 = TAB
-22 = U
-;147 = UNDERLINE
-;151 = UNLABELED
-200 = UP
-47 = V
-17 = W
-45 = X
-21 = Y
-;125 = YEN
-44 = Z
-340 = MOUSE4
-341 = MOUSE5
-343 = MOUSE6
-343 = MOUSE7
-344 = MOUSE8
+68 = F10
+87 = F11
+88 = F12
+100 = F13
+101 = F14
+102 = F15
+
+;---мышь---
+337 = Мышь 1
+338 = Мышь 2
+339 = Мышь 3
+340 = Мышь 4
+341 = Мышь 5
+343 = Мышь 6
+343 = Мышь 7
+344 = Мышь 8
+
+
+;---неиспользуемые и остсутствующие в стандартной (RU) раскладке ---
+
+
+;150 = AX		              ; Японская раскладка
+;144 = Circumflex (^)          ; Японская раскладка
+;121 = Convert		     ; Японская раскладка
+;112 = Kana		              ; Японская раскладка
+;148 = Kanji 		              ; Японская раскладка
+;123 = NoConvert		     ; Японская раскладка
+;125 = Yen                             ; Японская раскладка
+
+;145 = @                                ; NEC PC98 (2000)
+;146 = :                                 ; NEC PC98
+;179 = Num ,                         ; NEC PC98
+;141 = Num =                       ; NEC PC98
+;149 = Stop	                      ; NEC PC98 
+;147 = Underline                  ; NEC PC98
+;151 = Unlabeled                  ; Toshiba J-3100 (1989)
