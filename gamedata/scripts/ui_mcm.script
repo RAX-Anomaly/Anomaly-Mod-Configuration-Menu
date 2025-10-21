@@ -1726,7 +1726,11 @@ function UI_MCM:Register_Track(xml, handler, path, opt, v, flags)
 		self._Track[id].ctrl:SetFValue(value)
 	end
 	if (not v.no_str) then
-		self._Track[id].txt:SetText(value)
+		local text = value
+		if v.set_text_functor then
+			text = exec(unpack(v.set_text_functor), path, opt, v, value)
+		end
+		self._Track[id].txt:SetText(text)
 	end
 
 	if enable_ui_functors and v.ui_hook_functor then
@@ -1750,7 +1754,11 @@ function UI_MCM:Register_Track(xml, handler, path, opt, v, flags)
 end
 function UI_MCM:Callback_Track(ctrl, path, opt, v, value)
 	if (not v.no_str) then
-		ctrl:SetText(value)
+		local text = value
+		if v.set_text_functor then
+			text = exec(unpack(v.set_text_functor), path, opt, v, value)
+		end
+		ctrl:SetText(text)
 	end
 	self:CacheValue(path, opt, value, v)
 end
@@ -2891,6 +2899,13 @@ end
 	- Used by: support elements: ALL
 		Passes handling elements and metadata back to the defined functor for UI customization
 		For ADVANCED scripting use only - see below
+
+	[set_text_functor]
+	- Define: ( table {function, parameters} )
+	- Used by: option elements: Track
+		Override default text setting behavior by executing the defined functor to set option text
+		Accepts: (..., path, opt, v, value)
+		Returns: string
 		
 	[on_selection_functor]
 	- Define: ( table {function, parameters} )
