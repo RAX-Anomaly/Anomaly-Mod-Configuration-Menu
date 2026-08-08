@@ -443,35 +443,43 @@ This is set up for the generic mcm.script example above.
 <text>Text shown by any option with `text = "ui_mcm_title_example_example"`, which would be all of the slides</text>
 </string>
 
-<string id="ui_mcm_example_one_1check1">
+<string id="ui_mcm_menu_example_one">
+<text>Name of group 1</text>
+</string>
+
+<string id="ui_mcm_example_example_example_one_1check1">
 <text>Name of the 1check1 option</text>
 </string>
 
-<string id="ui_mcm_example_one_1check1_desc">
+<string id="ui_mcm_example_example_example_one_1check1_desc">
 <text>Tooltip of the 1check1 option</text>
 </string>
 
-<string id="ui_mcm_example_one_1keybind2">
+<string id="ui_mcm_example_example_example_one_1keybind2">
 <text>Name of the 1keybind2 option</text>
 </string>
 
-<string id="ui_mcm_example_one_1keybind2_desc">
+<string id="ui_mcm_example_example_example_one_1keybind2_desc">
 <text>Tooltip of the 1keybind2 option</text>
 </string>
 
-<string id="ui_mcm_example_one_2slider1">
+<string id="ui_mcm_menu_example_two">
+<text>Name of group 2</text>
+</string>
+
+<string id="ui_mcm_example_example_example_two_2slider1">
 <text>Name of the 2slider1 option</text>
 </string>
 
-<string id="ui_mcm_example_one_2slider1_desc">
+<string id="ui_mcm_example_example_example_two_2slider1_desc">
 <text>Tooltip of the 2slider1 option</text>
 </string>
 
-<string id="ui_mcm_example_one_2radio2">
+<string id="ui_mcm_example_example_example_two_2radio2">
 <text>Name of the 2radio2 option</text>
 </string>
 
-<string id="ui_mcm_example_one_2radio2_desc">
+<string id="ui_mcm_example_example_example_two_2radio2_desc">
 <text>Tooltip of the 2radio2 option</text>
 </string>
 
